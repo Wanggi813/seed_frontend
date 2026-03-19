@@ -133,7 +133,7 @@ const realLikeData = {
 
 const subjectOptions = {
   "중학교": ["1학년 과학", "2학년 과학", "3학년 과학"],
-  "고등학교": ["통합과학", "과학탐구실험", "통합사회"]
+  "고등학교": ["통합과학1", "통합과학2", "과학탐구실험1", "과학탐구실험2"]
 };
 
 const datasetLabels = {
@@ -220,3 +220,5 @@ export function buildStandardsPrompt() {
     ...lines
   ].join("\n");
 }
+
+export { realLikeData, subjectOptions, datasetLabels };

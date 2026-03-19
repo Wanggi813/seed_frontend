@@ -1,3 +1,8 @@
+import {
+  realLikeData,
+  subjectOptions,
+  datasetLabels
+} from "./data.js";
 
 const appState = {
   lastImprovedPrompt: "",
@@ -174,6 +179,39 @@ function getDatasetChartData() {
   }
 
   return [];
+}
+
+function renderSimpleChart(targetId, data = []) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+
+  if (!data.length) {
+    target.innerHTML = `<div style="padding:16px; color:#666;">표시할 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const maxValue = Math.max(...data.map(item => Number(item.value) || 0), 1);
+
+  target.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${data.map(item => {
+    const value = Number(item.value) || 0;
+    const width = Math.max(4, (value / maxValue) * 100);
+
+    return `
+          <div style="display:grid; grid-template-columns:120px 1fr 56px; gap:10px; align-items:center;">
+            <div style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${item.label}
+            </div>
+            <div style="background:#e9eef5; border-radius:999px; height:14px; overflow:hidden;">
+              <div style="width:${width}%; height:100%; background:#4f46e5; border-radius:999px;"></div>
+            </div>
+            <div style="font-size:13px; text-align:right;">${value}</div>
+          </div>
+        `;
+  }).join("")}
+    </div>
+  `;
 }
 
 function buildLessonPlanPrompt() {
@@ -353,40 +391,32 @@ function updateSelectedStandardsPreview() {
     .join("");
 }
 
-function populateCurriculumCourseSelect() {
-  const select = document.getElementById("curriculum-course");
-  if (!select || !appState.curriculumData) return;
+function syncCurriculumCourseWithSubject() {
+  const curriculumSelect = document.getElementById("curriculum-course");
+  if (!curriculumSelect) return;
 
-  const matchedCourses = appState.curriculumData.courses.filter(
-    (course) => course.school_level === appState.schoolLevel
-  );
+  const availableValues = Array.from(curriculumSelect.options).map((opt) => opt.value);
 
-  select.innerHTML = `<option value="">전체</option>`;
+  if (availableValues.includes(appState.subject)) {
+    curriculumSelect.value = appState.subject;
+  } else {
+    curriculumSelect.value = "";
+  }
 
-  matchedCourses.forEach((courseObj) => {
-    const option = document.createElement("option");
-    option.value = courseObj.course;
-    option.textContent = courseObj.course;
-    select.appendChild(option);
-  });
+  renderCurriculumStandards();
 }
 
 function renderCurriculumStandards() {
   const area = document.getElementById("curriculumArea");
-  const courseSelect = document.getElementById("curriculum-course");
-
   if (!area || !appState.curriculumData) return;
 
   area.innerHTML = "";
 
   let courses = appState.curriculumData.courses.filter(
-    (course) => course.school_level === appState.schoolLevel
+    (course) =>
+      course.school_level === appState.schoolLevel &&
+      course.course === appState.subject
   );
-
-  const selectedCourse = courseSelect?.value || "";
-  if (selectedCourse) {
-    courses = courses.filter((course) => course.course === selectedCourse);
-  }
 
   if (!courses.length) {
     area.innerHTML = `<p>표시할 성취기준이 없습니다.</p>`;
@@ -450,13 +480,11 @@ function renderCurriculumStandards() {
 async function initCurriculum() {
   try {
     appState.curriculumData = await loadCurriculumJson();
-    populateCurriculumCourseSelect();
     renderCurriculumStandards();
   } catch (error) {
     console.error("교육과정 로딩 실패:", error);
   }
 }
-
 
 function getIssueContent() {
   const mySchool = getMySchool();
@@ -956,6 +984,50 @@ function toggleSchoolDataPanel() {
   btn.textContent = isHidden ? "학교 데이터 숨기기" : "학교 데이터 보기";
 }
 
+function showScreen(screenNumber) {
+  const screens = document.querySelectorAll(".screen");
+  screens.forEach((screen) => {
+    screen.classList.remove("active");
+    screen.style.display = "none";
+  });
+
+  const target = document.getElementById(`screen-${screenNumber}`);
+  if (target) {
+    target.classList.add("active");
+    target.style.display = "block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function switchTab(tabName) {
+  const buttons = document.querySelectorAll(".tab-btn");
+  const panes = document.querySelectorAll(".tab-pane");
+
+  buttons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tabName);
+  });
+
+  panes.forEach((pane) => {
+    const isMatch = pane.dataset.tabContent === tabName;
+    pane.classList.toggle("active", isMatch);
+    pane.style.display = isMatch ? "block" : "none";
+  });
+}
+
+function openModal() {
+  const modal = document.getElementById("ai-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+}
+
+function closeModal() {
+  const modal = document.getElementById("ai-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.style.display = "none";
+}
+
 function bindEvents() {
   document.getElementById("school-level").addEventListener("change", (e) => {
     appState.schoolLevel = e.target.value;
@@ -963,14 +1035,14 @@ function bindEvents() {
     populateSchoolSelect();
 
     appState.selectedStandards = [];
-    populateCurriculumCourseSelect();
     renderCurriculumStandards();
   });
 
-  document.getElementById("curriculum-course")?.addEventListener("change", () => {
+  document.getElementById("subject").addEventListener("change", (e) => {
+    appState.subject = e.target.value;
+    appState.selectedStandards = [];
     renderCurriculumStandards();
   });
-
 
   document.getElementById("start-design-btn").addEventListener("click", () => {
     updateStateFromForm();
@@ -1080,22 +1152,6 @@ function bindEvents() {
 
   document.getElementById("restart-btn").addEventListener("click", () => showScreen(1));
   document.getElementById("save-pdf-btn").addEventListener("click", () => window.print());
-}
-
-function renderDatasetTabs() {
-  const wrap = document.getElementById("dataset-tabs");
-  wrap.innerHTML = "";
-  ["school", "trend", "env", "calendar"].forEach((key) => {
-    const btn = document.createElement("button");
-    btn.className = `dataset-tab ${appState.selectedDataset === key ? "active" : ""}`;
-    btn.textContent = datasetLabels[key];
-    btn.addEventListener("click", () => {
-      appState.selectedDataset = key;
-      renderDatasetTabs();
-      renderIssueData();
-    });
-    wrap.appendChild(btn);
-  });
 }
 
 async function init() {
