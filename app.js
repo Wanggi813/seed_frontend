@@ -125,6 +125,16 @@ function getDatasetChartTitle() {
   return titles[appState.selectedDataset];
 }
 
+function buildSelectedStandardsText() {
+  if (!appState.selectedStandards || appState.selectedStandards.length === 0) {
+    return "선택한 성취기준 없음";
+  }
+
+  return appState.selectedStandards
+    .map((std) => `- ${std.display_text || `[${std.achievement_code}] ${std.achievement_text}`}`)
+    .join("\n");
+}
+
 function getDatasetInsight() {
   const mySchool = getMySchool();
   const district = mySchool ? mySchool.district : "생활권";
@@ -252,6 +262,7 @@ function buildOutputsPrompt() {
   const lesson = appState.aiLessonPlan;
   const issue = getIssueContent();
   const mySchool = getMySchool();
+  const standardsBlock = buildStandardsPromptBlock();
 
   return `
 한 중등 교사가 아래 수업안을 바탕으로 실제 수업 자료를 만들려고 한다.
@@ -271,11 +282,15 @@ function buildOutputsPrompt() {
       .map((x) => `${x.title}: ${(x.activities || []).join(", ")}`)
       .join(" | ")}
 
+${standardsBlock}
+
 이 수업안에 어울리는 실제 수업 자료를 만든다.
-학생 활동지 문항은 학생들이 직접 답하고 토의할 수 있도록 구체적으로 쓰고,
-평가 루브릭은 수행 결과를 관찰할 수 있는 표현으로 만들며,
-발표자료 개요는 문제 제기부터 해석, 제안까지 흐름이 자연스럽게 이어지도록 한다.
-`;
+다음 기준을 충족하라.
+- 학생 활동지 문항은 학생이 직접 답하고 토의할 수 있도록 구체적으로 쓸 것
+- 평가 루브릭은 수행 결과를 관찰할 수 있는 표현으로 만들 것
+- 발표자료 개요는 문제 제기 → 자료 해석 → 해결 방안 제안 흐름이 자연스럽게 이어지도록 할 것
+- 선택한 성취기준이 활동지와 평가 요소에 드러나게 할 것
+`.trim();
 }
 
 function setLoadingState(active, title = "AI가 생성 중입니다", steps = []) {
@@ -355,21 +370,33 @@ function getSelectedStandardsFromUI() {
   }));
 }
 
-function buildStandardsPrompt() {
-  const selected = getSelectedStandardsFromUI();
-  appState.selectedStandards = selected;
+function refreshSelectedStandards() {
+  appState.selectedStandards = getSelectedStandardsFromUI();
+  return appState.selectedStandards;
+}
+
+function buildSelectedStandardsText() {
+  const selected = refreshSelectedStandards();
+
+  if (!selected.length) {
+    return "선택한 성취기준 없음";
+  }
+
+  return selected
+    .map((item) => `- ${item.display_text || `[${item.achievement_code}] ${item.achievement_text}`}`)
+    .join("\n");
+}
+
+function buildStandardsPromptBlock() {
+  const selected = refreshSelectedStandards();
 
   if (!selected.length) return "";
-
-  const lines = selected.map(
-    (item) => `- ${item.achievement_code}: ${item.achievement_text}`
-  );
 
   return [
     "다음 성취기준을 반드시 반영하여 작성하라.",
     "",
     "[성취기준]",
-    ...lines,
+    ...selected.map((item) => `- ${item.achievement_code}: ${item.achievement_text}`),
     ""
   ].join("\n");
 }
@@ -391,20 +418,6 @@ function updateSelectedStandardsPreview() {
     .join("");
 }
 
-function syncCurriculumCourseWithSubject() {
-  const curriculumSelect = document.getElementById("curriculum-course");
-  if (!curriculumSelect) return;
-
-  const availableValues = Array.from(curriculumSelect.options).map((opt) => opt.value);
-
-  if (availableValues.includes(appState.subject)) {
-    curriculumSelect.value = appState.subject;
-  } else {
-    curriculumSelect.value = "";
-  }
-
-  renderCurriculumStandards();
-}
 
 function renderCurriculumStandards() {
   const area = document.getElementById("curriculumArea");
@@ -949,31 +962,42 @@ function renderOutputs() {
 
 function renderPromptModalContent() {
   const mySchool = getMySchool();
-  const content = getIssueContent();
+  const standardsText = buildSelectedStandardsText();
 
   document.getElementById("prompt-step-1-meta").innerHTML = `
     학교급: ${appState.schoolLevel} / 과목: ${appState.subject} / 우리 학교: ${mySchool ? mySchool.name : "-"} / 자료: ${datasetLabels[appState.selectedDataset]}
   `;
   document.getElementById("prompt-step-1").textContent =
-    `다음 조건을 반영하여 ${appState.schoolLevel} ${appState.subject} 수준의 탐구 질문을 생성하시오.
-우리 학교는 "${mySchool ? mySchool.name : "-"}"이며 선택 자료는 "${datasetLabels[appState.selectedDataset]}"이다.
-학생이 실제 데이터를 비교·해석할 수 있도록 개방형 질문으로 구성하시오.`;
+    `탐구 질문 생성 단계
+- ${appState.schoolLevel} ${appState.subject} 수준으로 작성
+- 우리 학교: ${mySchool ? mySchool.name : "-"}
+- 선택 자료: ${datasetLabels[appState.selectedDataset]}
+- 반영 성취기준:
+${standardsText}
+- 학생이 실제 데이터를 비교·해석할 수 있는 개방형 질문으로 구성`;
 
   document.getElementById("prompt-step-2-meta").innerHTML = `
     수업 형태: ${appState.classType} / 기자재 환경: ${appState.equipment}
   `;
   document.getElementById("prompt-step-2").textContent =
-    `위 탐구 질문을 바탕으로 ${appState.classType} 수업 구조를 설계하시오.
-우리 학교와 주변 학교 데이터를 비교하는 활동을 반드시 포함하고,
-기자재가 "${appState.equipment}"인 학교 환경에서도 실행 가능해야 한다.`;
+    `수업 구조 설계 단계
+- ${appState.classType} 수업 구조
+- 기자재 환경: ${appState.equipment}
+- 반영 성취기준:
+${standardsText}
+- 우리 학교와 주변 학교 데이터를 비교하는 활동 포함
+- 실제 교실에서 실행 가능한 흐름으로 구성`;
 
   document.getElementById("prompt-step-3-meta").innerHTML = `
     생성 대상: 학생 활동지 / 평가 루브릭 / 발표자료 초안
   `;
   document.getElementById("prompt-step-3").textContent =
-    `위 수업 구조를 바탕으로 학생 활동지와 평가 루브릭 초안을 작성하시오.
-선택 자료 "${datasetLabels[appState.selectedDataset]}"를 활용한 해석 활동이 드러나도록 구성하시오.
-교사가 바로 수정·활용할 수 있는 간결한 형식으로 제시하시오.`;
+    `수업 자료 생성 단계
+- 학생 활동지, 평가 루브릭, 발표자료 초안 생성
+- 반영 성취기준:
+${standardsText}
+- 선택 자료 "${datasetLabels[appState.selectedDataset]}"를 활용한 해석 활동 포함
+- 교사가 바로 수정·활용할 수 있는 간결한 형식으로 제시`;
 }
 
 function toggleSchoolDataPanel() {
@@ -1078,12 +1102,7 @@ function bindEvents() {
       ]);
       startFakeProgress();
 
-      const standardsPrompt = buildStandardsPrompt();
-      const basePrompt = buildLessonPlanPrompt();
-      const prompt = standardsPrompt
-        ? `${standardsPrompt}\n\n${basePrompt}`
-        : basePrompt;
-
+      const prompt = buildLessonPlanPrompt();
       const result = await callLessonAPIStream(prompt, "plan", appState.fastMode);
 
       appState.aiLessonPlan = result;
@@ -1118,12 +1137,7 @@ function bindEvents() {
       ]);
       startFakeProgress();
 
-      const standardsPrompt = buildStandardsPrompt();
-      const basePrompt = buildOutputsPrompt();
-      const prompt = standardsPrompt
-        ? `${standardsPrompt}\n\n${basePrompt}`
-        : basePrompt;
-
+      const prompt = buildOutputsPrompt();
       const result = await callLessonAPIStream(prompt, "output", appState.fastMode);
 
       appState.aiOutputs = result;
