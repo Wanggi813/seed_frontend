@@ -75,7 +75,7 @@ function populateSchoolSelect() {
 function renderDatasetTabs() {
   const wrap = document.getElementById("dataset-tabs");
   wrap.innerHTML = "";
-  ["school", "trend", "env", "calendar"].forEach((key) => {
+  ["school", "trend", "env", "solar"].forEach((key) => {
     const btn = document.createElement("button");
     btn.className = `dataset-tab ${appState.selectedDataset === key ? "active" : ""}`;
     btn.textContent = datasetLabels[key];
@@ -121,7 +121,7 @@ function getDatasetChartTitle() {
     school: `${schoolName}와 주변 학교 현황 비교`,
     trend: `${district} 학생 수 변화 추이`,
     env: `${district} 월별 PM2.5 변화`,
-    calendar: `${schoolName} 및 주변 학교 학사일정 예시`
+    solar: `${schoolName} 및 주변 학교 태양광 설치·발전량 비교`
   };
   return titles[appState.selectedDataset];
 }
@@ -145,8 +145,14 @@ function getDatasetInsight() {
     const avg = Math.round(rows.reduce((s, r) => s + r.pm25, 0) / rows.length);
     return `${district}의 평균 PM2.5 값은 ${avg}입니다.`;
   }
-  const events = realLikeData.schoolCalendar.filter((r) => getNeighborSchools().some((s) => s.schoolId === r.schoolId));
-  return `주변 학교 기준 학사일정 예시 ${events.length}건을 수업 적용 시기 판단에 활용할 수 있습니다.`;
+  const solarRows = realLikeData.solarStats.filter((r) =>
+    getNeighborSchools().some((s) => s.schoolId === r.schoolId)
+  );
+
+  const installedCount = solarRows.filter((r) => r.hasSolar).length;
+  const totalGeneration = solarRows.reduce((sum, r) => sum + (r.generationKwh || 0), 0);
+
+  return `주변 학교 ${solarRows.length}개교 중 ${installedCount}개교가 태양광을 설치했고, 총 발전량은 ${totalGeneration.toLocaleString()}kWh입니다.`;
 }
 
 function getDatasetChartData() {
@@ -166,17 +172,19 @@ function getDatasetChartData() {
   if (appState.selectedDataset === "env") {
     return realLikeData.airQuality
       .filter((row) => row.district === district)
-      .map((row) => ({ label: row.month, value: row.pm25 }));
+      .map((row) => ({
+        label: `${row.year}.${String(row.month).padStart(2, "0")}`,
+        value: row.pm25
+      }));
   }
 
-  if (appState.selectedDataset === "calendar") {
-    const events = realLikeData.schoolCalendar.filter((row) =>
-      getNeighborSchools().some((s) => s.schoolId === row.schoolId)
-    );
-    return events.map((row, idx) => ({
-      label: row.eventName.length > 4 ? row.eventName.slice(0, 4) + "…" : row.eventName,
-      value: idx + 1
-    }));
+  if (appState.selectedDataset === "solar") {
+    return realLikeData.solarStats
+      .filter((row) => getNeighborSchools().some((s) => s.schoolId === row.schoolId))
+      .map((row) => ({
+        label: `${row.schoolName} (${row.hasSolar ? "설치" : "미설치"})`,
+        value: row.generationKwh || 0
+      }));
   }
 
   return [];
@@ -194,7 +202,14 @@ function renderSimpleChart(targetId, data = []) {
   const maxValue = Math.max(...data.map(item => Number(item.value) || 0), 1);
 
   target.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:10px;">
+  <div style="
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    max-height:420px;
+    overflow-y:auto;
+    padding-right:8px;
+  ">
       ${data.map(item => {
     const value = Number(item.value) || 0;
     const width = Math.max(4, (value / maxValue) * 100);
@@ -647,7 +662,7 @@ function getIssueContent() {
       title: "에너지 사용",
       dataRecommendations: [
         { name: "학교 현황 데이터", text: `${schoolName}와 주변 학교의 학생 수·교실 수·시설 수를 참고합니다.` },
-        { name: "학사일정 데이터", text: `에너지 절약 캠페인 적용 시기를 구상합니다.` },
+        { name: "태양광 설치·발전량 데이터", text: `${schoolName}와 주변 학교의 태양광 설치 여부와 발전량을 비교합니다.` },
         { name: "생활권 학생 수 데이터", text: `${district}의 학교 운영 규모를 이해하는 보조 자료로 활용합니다.` }
       ],
       previewQuestions: [
@@ -999,6 +1014,15 @@ function toggleSchoolDataPanel() {
   btn.textContent = isHidden ? "학교 데이터 숨기기" : "학교 데이터 보기";
 }
 
+function updateStepHighlight(screenNumber) {
+  const steps = document.querySelectorAll(".step");
+
+  steps.forEach((step, index) => {
+    const isActive = index === screenNumber - 1;
+    step.classList.toggle("active", isActive);
+  });
+}
+
 function showScreen(screenNumber) {
   const screens = document.querySelectorAll(".screen");
   screens.forEach((screen) => {
@@ -1010,8 +1034,10 @@ function showScreen(screenNumber) {
   if (target) {
     target.classList.add("active");
     target.style.display = "block";
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  updateStepHighlight(screenNumber);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function switchTab(tabName) {
@@ -1167,6 +1193,7 @@ async function init() {
   renderSchoolDataTable();
   bindEvents();
   await initCurriculum();
+  showScreen(1);
 }
 
 const API_BASE =

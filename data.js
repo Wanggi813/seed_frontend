@@ -173,7 +173,7 @@ function generateAirQuality() {
         results.push({
           district,
           year,
-          month: `${month}월`,
+          month,
           pm25: Number(pm25.toFixed(1)),
           pm10: Number(pm10.toFixed(1)),
           avgTemp: Number(avgTemp.toFixed(1)),
@@ -224,7 +224,7 @@ function generateSchoolEnvironment(schools) {
           schoolId: school.schoolId,
           district: school.district,
           year,
-          month: `${month}월`,
+          month,
           pm25: Number(pm25.toFixed(1)),
           indoorCo2: Number(indoorCo2.toFixed(0)),
           classroomTemp: Number(classroomTemp.toFixed(1)),
@@ -239,39 +239,43 @@ function generateSchoolEnvironment(schools) {
 
 const schoolEnvironment = generateSchoolEnvironment(schools);
 
-// 학교별 학사일정 예시
-function generateSchoolCalendar(schools) {
-  const templates = [
-    { month: "03", day: "18", name: "과학 탐구 주간" },
-    { month: "04", day: "12", name: "환경 데이터 분석 프로젝트" },
-    { month: "05", day: "21", name: "지역 문제 해결 발표회" },
-    { month: "09", day: "16", name: "과학탐구실험 집중 주간" },
-    { month: "10", day: "14", name: "학생 데이터 포럼" },
-  ];
-
+// 학교별 태양광 설치·발전량 데이터
+function generateSolarStats(schools) {
   const results = [];
 
-  schools.forEach((school, idx) => {
-    templates.forEach((item, j) => {
-      results.push({
-        schoolId: school.schoolId,
-        eventDate: `2026-${item.month}-${String(Number(item.day) + (idx + j) % 3).padStart(2, "0")}`,
-        eventName: item.name,
-      });
+  schools.forEach((school, schoolIndex) => {
+    const hasSolar = schoolIndex % 4 !== 1; // 일부 학교만 미설치
+    const capacityKw = hasSolar
+      ? 25 + (schoolIndex % 5) * 10 + Math.round(seededValue(schoolIndex + 50) * 8)
+      : 0;
+
+    const generationKwh = hasSolar
+      ? Math.round(
+          capacityKw * (950 + (schoolIndex % 3) * 70 + seededValue(schoolIndex * 13) * 120)
+        )
+      : 0;
+
+    results.push({
+      schoolId: school.schoolId,
+      schoolName: school.name,
+      district: school.district,
+      hasSolar,
+      capacityKw,
+      generationKwh,
     });
   });
 
   return results;
 }
 
-const schoolCalendar = generateSchoolCalendar(schools);
+const solarStats = generateSolarStats(schools);
 
 const realLikeData = {
   schools,
   selectableSchoolIds,
   schoolYearStats,
   schoolEnvironment,
-  schoolCalendar,
+  solarStats,
   educationStats,
   airQuality,
 };
@@ -286,7 +290,7 @@ const datasetLabels = {
   trend: "생활권 학생 수 변화(10년)",
   env: "생활권 환경 데이터(10년)",
   schoolEnv: "학교별 환경 데이터(10년)",
-  calendar: "학사일정 예시",
+  solar: "태양광 설치·발전량 데이터",
 };
 
 let curriculumData = null;
