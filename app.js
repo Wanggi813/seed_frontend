@@ -72,10 +72,26 @@ function populateSchoolSelect() {
   select.value = appState.mySchoolId;
 }
 
+function getRecommendedDatasetsByStandards() {
+  const selected = refreshSelectedStandards();
+  const text = selected.map(s => `${s.achievement_text} ${s.display_text}`).join(" ");
+
+  if (text.includes("환경") || text.includes("대기")) {
+    return ["env", "schoolEnv", "school"];
+  }
+  if (text.includes("에너지")) {
+    return ["solar", "school", "trend"];
+  }
+  return ["school", "trend", "env", "solar"];
+}
+
 function renderDatasetTabs() {
   const wrap = document.getElementById("dataset-tabs");
   wrap.innerHTML = "";
-  ["school", "trend", "env", "solar"].forEach((key) => {
+
+  const keys = getRecommendedDatasetsByStandards();
+
+  keys.forEach((key) => {
     const btn = document.createElement("button");
     btn.className = `dataset-tab ${appState.selectedDataset === key ? "active" : ""}`;
     btn.textContent = datasetLabels[key];
@@ -121,6 +137,7 @@ function getDatasetChartTitle() {
     school: `${schoolName}와 주변 학교 현황 비교`,
     trend: `${district} 학생 수 변화 추이`,
     env: `${district} 월별 PM2.5 변화`,
+    schoolEnv: `${schoolName}와 주변 학교의 학교별 환경 비교`,
     solar: `${schoolName} 및 주변 학교 태양광 설치·발전량 비교`
   };
   return titles[appState.selectedDataset];
@@ -135,20 +152,30 @@ function getDatasetInsight() {
     const maxSchool = [...neighbors].sort((a, b) => b.students - a.students)[0];
     return `${district}에서는 ${maxSchool.name}의 학생 수가 가장 많아 학교 규모 차이를 비교하기 좋습니다.`;
   }
+
   if (appState.selectedDataset === "trend") {
     const rows = realLikeData.educationStats.filter((r) => r.district === district);
     const diff = rows[rows.length - 1].middleStudents - rows[0].middleStudents;
     return `${district}의 최근 학생 수 변화는 ${diff > 0 ? "+" : ""}${diff}명입니다.`;
   }
+
   if (appState.selectedDataset === "env") {
     const rows = realLikeData.airQuality.filter((r) => r.district === district);
     const avg = Math.round(rows.reduce((s, r) => s + r.pm25, 0) / rows.length);
     return `${district}의 평균 PM2.5 값은 ${avg}입니다.`;
   }
+
+  if (appState.selectedDataset === "schoolEnv") {
+    const rows = realLikeData.schoolEnvironment.filter((r) =>
+      getNeighborSchools().some((s) => s.schoolId === r.schoolId)
+    );
+    const avg = Math.round(rows.reduce((s, r) => s + r.pm25, 0) / rows.length);
+    return `주변 학교의 학교별 환경 데이터를 보면 평균 PM2.5는 ${avg}이며, 학교별 실내환경 비교 탐구에 활용할 수 있습니다.`;
+  }
+
   const solarRows = realLikeData.solarStats.filter((r) =>
     getNeighborSchools().some((s) => s.schoolId === r.schoolId)
   );
-
   const installedCount = solarRows.filter((r) => r.hasSolar).length;
   const totalGeneration = solarRows.reduce((sum, r) => sum + (r.generationKwh || 0), 0);
 
@@ -176,6 +203,22 @@ function getDatasetChartData() {
         label: `${row.year}.${String(row.month).padStart(2, "0")}`,
         value: row.pm25
       }));
+  }
+
+  if (appState.selectedDataset === "schoolEnv") {
+    const latestYear = 2025;
+    return realLikeData.schoolEnvironment
+      .filter((row) =>
+        row.year === latestYear &&
+        getNeighborSchools().some((s) => s.schoolId === row.schoolId)
+      )
+      .map((row) => {
+        const school = realLikeData.schools.find((s) => s.schoolId === row.schoolId);
+        return {
+          label: school ? school.name : row.schoolId,
+          value: row.pm25
+        };
+      });
   }
 
   if (appState.selectedDataset === "solar") {
@@ -236,6 +279,7 @@ function buildLessonPlanPrompt() {
   const datasetName = datasetLabels[appState.selectedDataset];
   const chartInsight = getDatasetInsight();
   const neighbors = getNeighborSchools();
+  const standardsBlock = buildStandardsPromptBlock();
 
   return `
 한 중등 교사가 지역 데이터를 활용한 탐구수업을 설계하려고 한다.
@@ -256,12 +300,38 @@ function buildLessonPlanPrompt() {
 - 선택한 데이터: ${datasetName}
 - 데이터 해석 포인트: ${chartInsight}
 
-이 조건을 바탕으로 학생들이 실제로 탐구해 볼 만한 수업안을 설계한다.
-질문은 학생의 호기심이 살아 있도록 만들고,
-수업 목표는 관찰, 비교, 해석, 제안 같은 활동 중심으로 제시하며,
-차시 흐름은 실제 교실에서 자연스럽게 이어지는 형태로 구성한다.
-지역 문제와 학교 생활의 연결도 분명하게 드러나야 한다.
-`;
+${standardsBlock}
+
+반드시 다음 조건을 지켜 수업안을 작성하라.
+1. 선택한 성취기준이 수업 목표, 탐구 질문, 차시 활동, 평가 포인트에 직접 드러나야 한다.
+2. 각 차시 목표 옆에 어떤 성취기준이 연결되는지 명시하라.
+3. 하위 질문은 성취기준의 동사(설명한다, 비교한다, 해석한다, 추론한다, 제안한다 등)가 드러나게 작성하라.
+4. 활동은 반드시 데이터 읽기 → 해석 → 결론/제안의 흐름을 가지게 하라.
+5. 출력 형식은 아래 JSON 구조를 따르라.
+
+{
+  "mainQuestion": "문자열",
+  "subQuestions": ["문자열", "문자열", "문자열"],
+  "lessonGoals": ["문자열", "문자열", "문자열"],
+  "standardLinks": [
+    {
+      "code": "성취기준 코드",
+      "text": "성취기준 내용",
+      "appliedTo": ["핵심 질문", "1차시 목표", "평가 요소"]
+    }
+  ],
+  "lessonFlow": [
+    {
+      "title": "문자열",
+      "goal": "문자열",
+      "standardCodes": ["코드1", "코드2"],
+      "activities": ["문자열", "문자열", "문자열"],
+      "wrapUp": "문자열",
+      "nextConnection": "문자열"
+    }
+  ]
+}
+`.trim();
 }
 
 function buildOutputsPrompt() {
@@ -290,14 +360,33 @@ function buildOutputsPrompt() {
 
 ${standardsBlock}
 
-이 수업안에 어울리는 실제 수업 자료를 만든다.
-다음 기준을 충족하라.
-- 학생 활동지 문항은 학생이 직접 답하고 토의할 수 있도록 구체적으로 쓸 것
-- 평가 루브릭은 수행 결과를 관찰할 수 있는 표현으로 만들 것
-- 발표자료 개요는 문제 제기 → 자료 해석 → 해결 방안 제안 흐름이 자연스럽게 이어지도록 할 것
-- 선택한 성취기준이 활동지와 평가 요소에 드러나게 할 것
+다음을 반드시 지켜라.
+1. 활동지의 각 문항 옆에 연결된 성취기준 코드를 표시하라.
+2. 루브릭의 각 평가 요소가 어떤 성취기준과 연결되는지 표시하라.
+3. 발표자료 개요에도 성취기준이 반영된 분석-해석-제안 구조를 유지하라.
+4. 출력 형식은 아래 JSON 구조를 따르라.
+
+{
+  "worksheet": [
+    {
+      "question": "문항 내용",
+      "standardCodes": ["코드1"]
+    }
+  ],
+  "rubric": [
+    {
+      "criterion": "평가 요소",
+      "standardCodes": ["코드1", "코드2"],
+      "high": "상 수준",
+      "mid": "중 수준",
+      "low": "하 수준"
+    }
+  ],
+  "slides": ["문자열", "문자열", "문자열"]
+}
 `.trim();
 }
+
 
 function setLoadingState(active, title = "AI가 생성 중입니다", steps = []) {
   const overlay = document.getElementById("loading-overlay");
@@ -831,7 +920,13 @@ function renderIssueData() {
 }
 
 function renderLessonPlan() {
-  const content = appState.aiLessonPlan || getIssueContent();
+  const content = appState.aiLessonPlan ?? {
+  mainQuestion: "AI 수업안이 아직 생성되지 않았습니다.",
+  subQuestions: [],
+  lessonGoals: [],
+  lessonFlow: [],
+  standardLinks: []
+};
   const mySchool = getMySchool();
   const neighbors = getNeighborSchools();
 
@@ -848,7 +943,22 @@ function renderLessonPlan() {
   const subQuestions = document.getElementById("sub-questions");
   const lessonGoals = document.getElementById("lesson-goals");
   const lessonFlow = document.getElementById("lesson-flow");
-
+  const standardBox = document.getElementById("standard-links");
+  if (standardBox) {
+    const links = content.standardLinks || [];
+    if (!links.length) {
+      standardBox.innerHTML = "<p>성취기준 연결 정보가 없습니다.</p>";
+    } else {
+      standardBox.innerHTML = links.map(item => `
+      <div class="standard-link-card">
+        <strong>${item.code}</strong> ${item.text}
+        <div style="margin-top:6px; color: var(--sub);">
+          적용 위치: ${(item.appliedTo || []).join(", ")}
+        </div>
+      </div>
+    `).join("");
+    }
+  }
   subQuestions.innerHTML = "";
   lessonGoals.innerHTML = "";
   lessonFlow.innerHTML = "";
@@ -914,19 +1024,9 @@ function renderOutputs() {
   const output = appState.aiOutputs;
   const mySchool = getMySchool();
 
-  const worksheetItems = output?.worksheet || lesson.subQuestions || [];
-  const rubricRows = output?.rubric || [
-    ["데이터 해석", "우리 학교와 지역 자료를 근거 있게 연결해 해석함", "기본 경향을 해석함", "자료 해석이 부분적임"],
-    ["문제 분석", "지역문제와 학교 환경의 관계를 논리적으로 설명함", "기본적 관계를 설명함", "분석이 단편적임"],
-    ["해결 방안", "구체적이고 실행 가능한 제안을 함", "일반적 제안을 함", "구체성이 부족함"]
-  ];
-  const slides = output?.slides || [
-    `문제 제기: ${lesson.title || getIssueContent().title}`,
-    "우리 학교 및 주변 학교 비교",
-    datasetLabels[appState.selectedDataset],
-    "탐구 결과 정리",
-    "실천 방안 제안"
-  ];
+  const worksheetItems = output?.worksheet || [];
+  const rubricRows = output?.rubric || [];
+  const slides = output?.slides || [];
 
   document.getElementById("worksheet-content").innerHTML = `
     <h3>학생 활동지</h3>
@@ -934,27 +1034,37 @@ function renderOutputs() {
     <p><strong>핵심 질문:</strong> ${lesson.mainQuestion}</p>
     <p><strong>활용 자료:</strong> ${datasetLabels[appState.selectedDataset]}</p>
     <ol class="ordered-list">
-      ${worksheetItems.map((item) => `<li>${item}</li>`).join("")}
+      ${worksheetItems.map((item) => `
+        <li>
+          ${item.question}
+          <div style="margin-top:4px; color:var(--sub); font-size:13px;">
+            성취기준: ${(item.standardCodes || []).join(", ")}
+          </div>
+        </li>
+      `).join("")}
     </ol>
   `;
 
   document.getElementById("rubric-table").innerHTML = `
     <thead>
-      <tr><th>평가 요소</th><th>상</th><th>중</th><th>하</th></tr>
+      <tr>
+        <th>평가 요소</th>
+        <th>성취기준</th>
+        <th>상</th>
+        <th>중</th>
+        <th>하</th>
+      </tr>
     </thead>
     <tbody>
-      ${rubricRows
-      .map(
-        (row) => `
+      ${rubricRows.map((row) => `
         <tr>
-          <td>${row[0]}</td>
-          <td>${row[1]}</td>
-          <td>${row[2]}</td>
-          <td>${row[3]}</td>
+          <td>${row.criterion}</td>
+          <td>${(row.standardCodes || []).join(", ")}</td>
+          <td>${row.high}</td>
+          <td>${row.mid}</td>
+          <td>${row.low}</td>
         </tr>
-      `
-      )
-      .join("")}
+      `).join("")}
     </tbody>
   `;
 
@@ -1042,14 +1152,15 @@ function showScreen(screenNumber) {
 
 function switchTab(tabName) {
   const buttons = document.querySelectorAll(".tab-btn");
-  const panes = document.querySelectorAll(".tab-pane");
+  const panes = document.querySelectorAll(".tab-content");
 
   buttons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tabName);
   });
 
   panes.forEach((pane) => {
-    const isMatch = pane.dataset.tabContent === tabName;
+    const isMatch =
+      pane.id === `tab-${tabName}` || pane.dataset.tabContent === tabName;
     pane.classList.toggle("active", isMatch);
     pane.style.display = isMatch ? "block" : "none";
   });
@@ -1108,6 +1219,12 @@ function bindEvents() {
     const btn = document.getElementById("generate-plan-btn");
 
     try {
+      const selected = refreshSelectedStandards();
+      if (!selected.length) {
+        alert("성취기준을 1개 이상 선택해 주세요.");
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = "AI 수업안 생성 중...";
 
