@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>수업생성 플랫폼 씨앗</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header class="site-header">
     <div class="header-inner">
@@ -88,6 +90,13 @@
             </select>
           </div>
         </div>
+
+        <div class="switch-row">
+          <input type="checkbox" id="fast-mode" checked />
+          <label for="fast-mode">빠르게 생성하기 (추천)</label>
+          <span class="field-help">정교 모드보다 빠르게 응답합니다.</span>
+        </div>
+
       </div>
 
       <div class="action-row">
@@ -306,5 +315,16 @@
   <script src="data.js"></script>
   <script src="ui.js"></script>
   <script src="app.js"></script>
+
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <h3 id="loading-title">AI가 생성 중입니다</h3>
+      <p id="loading-status">잠시만 기다려 주세요.</p>
+      <ol id="loading-steps" class="loading-steps"></ol>
+    </div>
+  </div>
+
 </body>
+
 </html>

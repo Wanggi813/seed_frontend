@@ -609,3 +609,126 @@ button {
     align-items: flex-start;
   }
 }
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.switch-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.field-help {
+  color: var(--sub);
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+.loading-overlay::before {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 28, 21, 0.45);
+  content: "";
+}
+
+.loading-card {
+  position: relative;
+  z-index: 1;
+  width: min(460px, calc(100vw - 32px));
+  border-radius: 22px;
+  padding: 28px 24px;
+  text-align: center;
+  background: white;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+}
+
+.loading-spinner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 5px solid #d9ead8;
+  border-top-color: var(--primary);
+  margin: 0 auto 16px;
+  animation: spin 0.9s linear infinite;
+}
+
+.loading-steps {
+  text-align: left;
+  margin: 18px 0 0;
+  padding-left: 20px;
+  color: var(--sub);
+}
+
+.loading-steps li {
+  margin-bottom: 8px;
+}
+
+.loading-steps li.active {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.loading-steps li.done {
+  color: var(--text);
+}
+
+.lesson-step-card {
+  background: #f9fcf7;
+  border: 1px solid #dbe8d7;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+
+.lesson-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.lesson-step-badge {
+  background: var(--primary);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.lesson-step-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lesson-step-mini {
+  background: white;
+  border: 1px solid #e3ede0;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

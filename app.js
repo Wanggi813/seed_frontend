@@ -11,6 +11,8 @@ const appState = {
   mySchoolId: "A001",
   aiLessonPlan: null,
   aiOutputs: null,
+  fastMode: true,
+  loadingTimer: null,
 };
 
 
@@ -86,16 +88,18 @@ function updateStateFromForm() {
   appState.equipment = document.getElementById("equipment").value;
   appState.goal = document.getElementById("goal").value;
   appState.level = document.getElementById("level").value;
+  appState.fastMode = document.getElementById("fast-mode")?.checked ?? true;
 }
 
 function renderSummary(targetId) {
   const target = document.getElementById(targetId);
   const mySchool = getMySchool();
+
   target.innerHTML = `
     <strong>선택한 조건</strong><br>
     학교급: ${appState.schoolLevel} · 과목: ${appState.subject} · 수업 형태: ${appState.classType}<br>
     기자재 환경: ${appState.equipment} · 수업 목표: ${appState.goal} · 학생 참여 수준: ${appState.level}<br>
-    우리 학교: ${mySchool ? `${mySchool.name} (${mySchool.district})` : "-"}
+    우리 학교: ${mySchool ? `${mySchool.name} (${mySchool.district})` : "-"} · 생성 모드: ${appState.fastMode ? "빠르게" : "정교하게"}
   `;
 }
 
@@ -223,8 +227,8 @@ function buildOutputsPrompt() {
 - 하위 질문: ${(lesson?.subQuestions || []).join(" | ")}
 - 수업 목표: ${(lesson?.lessonGoals || []).join(" | ")}
 - 수업 흐름: ${(lesson?.lessonFlow || [])
-      .map((x) => `${x.title}: ${x.text}`)
-      .join(" | ")}
+    .map((x) => `${x.title}: ${(x.activities || []).join(", ")}`)
+    .join(" | ")}
 
 이 수업안에 어울리는 실제 수업 자료를 만든다.
 학생 활동지 문항은 학생들이 직접 답하고 토의할 수 있도록 구체적으로 쓰고,
@@ -232,6 +236,65 @@ function buildOutputsPrompt() {
 발표자료 개요는 문제 제기부터 해석, 제안까지 흐름이 자연스럽게 이어지도록 한다.
 `;
 }
+
+function setLoadingState(active, title = "AI가 생성 중입니다", steps = []) {
+  const overlay = document.getElementById("loading-overlay");
+  const titleEl = document.getElementById("loading-title");
+  const statusEl = document.getElementById("loading-status");
+  const listEl = document.getElementById("loading-steps");
+
+  if (!overlay) return;
+
+  if (!active) {
+    overlay.classList.add("hidden");
+    listEl.innerHTML = "";
+    statusEl.textContent = "";
+    clearInterval(appState.loadingTimer);
+    appState.loadingTimer = null;
+    return;
+  }
+
+  titleEl.textContent = title;
+  statusEl.textContent = "잠시만 기다려 주세요.";
+  listEl.innerHTML = steps
+    .map((step, index) => `<li data-step-index="${index}">${step}</li>`)
+    .join("");
+
+  overlay.classList.remove("hidden");
+}
+
+function updateLoadingProgress(label, stepIndex = null) {
+  const statusEl = document.getElementById("loading-status");
+  const items = [...document.querySelectorAll("#loading-steps li")];
+
+  if (statusEl) statusEl.textContent = label;
+
+  if (stepIndex !== null) {
+    items.forEach((item, idx) => {
+      item.classList.toggle("active", idx === stepIndex);
+      item.classList.toggle("done", idx < stepIndex);
+    });
+  }
+}
+
+function startFakeProgress() {
+  const labels = [
+    "입력 조건을 정리하고 있습니다.",
+    "데이터 맥락을 연결하고 있습니다.",
+    "수업 구조를 설계하고 있습니다.",
+    "응답 형식을 점검하고 있습니다."
+  ];
+
+  let idx = 0;
+  updateLoadingProgress(labels[0], 0);
+
+  clearInterval(appState.loadingTimer);
+  appState.loadingTimer = setInterval(() => {
+    idx = Math.min(idx + 1, labels.length - 1);
+    updateLoadingProgress(labels[idx], idx);
+  }, 1400);
+}
+
 
 function getIssueContent() {
   const mySchool = getMySchool();
@@ -634,7 +697,7 @@ function renderLessonPlan() {
     lessonFlow.appendChild(card);
   });
 
-  renderPromptModalContent?.();
+  renderPromptModalContent();
 }
 
 function renderOutputs() {
@@ -757,52 +820,70 @@ function bindEvents() {
     });
   });
 
-  document.getElementById("generate-plan-btn").addEventListener("click", async () => {
-    try {
-      const btn = document.getElementById("generate-plan-btn");
-      btn.disabled = true;
-      btn.textContent = "AI 수업안 생성 중...";
+ document.getElementById("generate-plan-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("generate-plan-btn");
 
-      const prompt = buildLessonPlanPrompt();
-      const result = await callLessonAPI(prompt, "plan");
+  try {
+    btn.disabled = true;
+    btn.textContent = "AI 수업안 생성 중...";
 
-      appState.aiLessonPlan = result;
-      appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
-      renderLessonPlan();
-      showScreen(3);
-    } catch (err) {
-      alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
-    } finally {
-      const btn = document.getElementById("generate-plan-btn");
-      btn.disabled = false;
-      btn.textContent = "이 주제로 수업 설계하기";
+    setLoadingState(true, "AI가 수업안을 설계하고 있습니다", [
+      "조건 확인",
+      "데이터 연결",
+      "수업안 생성",
+      "결과 정리"
+    ]);
+    startFakeProgress();
+
+    const prompt = buildLessonPlanPrompt();
+    const result = await callLessonAPIStream(prompt, "plan", appState.fastMode);
+
+    appState.aiLessonPlan = result;
+    appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
+    renderLessonPlan();
+    showScreen(3);
+  } catch (err) {
+    alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
+  } finally {
+    setLoadingState(false);
+    btn.disabled = false;
+    btn.textContent = "이 주제로 수업 설계하기";
+  }
+});
+
+ document.getElementById("generate-output-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("generate-output-btn");
+
+  try {
+    btn.disabled = true;
+    btn.textContent = "산출물 생성 중...";
+
+    if (!appState.aiLessonPlan) {
+      throw new Error("먼저 AI 수업안을 생성해야 합니다.");
     }
-  });
 
-  document.getElementById("generate-output-btn").addEventListener("click", async () => {
-    try {
-      const btn = document.getElementById("generate-output-btn");
-      btn.disabled = true;
-      btn.textContent = "산출물 생성 중...";
+    setLoadingState(true, "AI가 수업 자료를 만들고 있습니다", [
+      "수업안 읽기",
+      "활동지 생성",
+      "루브릭 생성",
+      "발표자료 정리"
+    ]);
+    startFakeProgress();
 
-      if (!appState.aiLessonPlan) {
-        throw new Error("먼저 AI 수업안을 생성해야 합니다.");
-      }
+    const prompt = buildOutputsPrompt();
+    const result = await callLessonAPIStream(prompt, "output", appState.fastMode);
 
-      const prompt = buildOutputsPrompt();
-      const result = await callLessonAPI(prompt, "output");
-
-      appState.aiOutputs = result;
-      renderOutputs();
-      showScreen(4);
-    } catch (err) {
-      alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
-    } finally {
-      const btn = document.getElementById("generate-output-btn");
-      btn.disabled = false;
-      btn.textContent = "수업 산출물 생성";
-    }
-  });
+    appState.aiOutputs = result;
+    renderOutputs();
+    showScreen(4);
+  } catch (err) {
+    alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
+  } finally {
+    setLoadingState(false);
+    btn.disabled = false;
+    btn.textContent = "수업 산출물 생성";
+  }
+});
 
   document.getElementById("open-ai-modal-btn").addEventListener("click", openModal);
   document.getElementById("close-ai-modal-btn").addEventListener("click", closeModal);
@@ -850,13 +931,13 @@ const API_BASE =
     ? "http://localhost:3000"
     : "https://seed-backend-xso7.onrender.com";
 
-async function callLessonAPI(prompt, mode = "plan") {
+async function callLessonAPI(prompt, mode = "plan", fastMode = true) {
   const res = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ prompt, mode })
+    body: JSON.stringify({ prompt, mode, fastMode })
   });
 
   if (!res.ok) {
@@ -865,6 +946,33 @@ async function callLessonAPI(prompt, mode = "plan") {
   }
 
   return await res.json();
+}
+
+async function callLessonAPIStream(prompt, mode = "plan", fastMode = true) {
+  const url = new URL(`${API_BASE}/api/generate-stream`);
+  url.searchParams.set("prompt", prompt);
+  url.searchParams.set("mode", mode);
+  url.searchParams.set("fastMode", String(fastMode));
+
+  return new Promise((resolve, reject) => {
+    const eventSource = new EventSource(url);
+
+    eventSource.addEventListener("progress", (event) => {
+      const data = JSON.parse(event.data);
+      updateLoadingProgress(data.label, Math.max(0, (data.step || 1) - 1));
+    });
+
+    eventSource.addEventListener("result", (event) => {
+      const data = JSON.parse(event.data);
+      eventSource.close();
+      resolve(data);
+    });
+
+    eventSource.addEventListener("error", () => {
+      eventSource.close();
+      reject(new Error("스트리밍 요청 중 문제가 발생했습니다."));
+    });
+  });
 }
 
 init();
