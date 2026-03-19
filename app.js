@@ -1,7 +1,8 @@
 import {
   realLikeData,
   subjectOptions,
-  datasetLabels
+  datasetLabels,
+  getSelectableSchools
 } from "./data.js";
 
 const appState = {
@@ -53,22 +54,22 @@ function populateSubjectSelect() {
 
 function populateSchoolSelect() {
   const select = document.getElementById("my-school");
-  select.innerHTML = "";
-  realLikeData.schools
-    .filter((school) => {
-      if (appState.schoolLevel === "중학교") return school.level === "중학교";
-      return school.level === "중학교"; // 현재 데이터가 중학교만 있으므로 유지
-    })
-    .forEach((school, index) => {
-      const option = document.createElement("option");
-      option.value = school.schoolId;
-      option.textContent = `${school.name} (${school.district})`;
-      if (index === 0) {
-        option.selected = true;
-        appState.mySchoolId = school.schoolId;
-      }
-      select.appendChild(option);
-    });
+  if (!select) return;
+
+  const selectableSchools = getSelectableSchools();
+
+  select.innerHTML = selectableSchools
+    .map(
+      (school) =>
+        `<option value="${school.schoolId}">${school.name} (${school.district})</option>`
+    )
+    .join("");
+
+  if (!selectableSchools.find((s) => s.schoolId === appState.mySchoolId)) {
+    appState.mySchoolId = selectableSchools[0]?.schoolId || "";
+  }
+
+  select.value = appState.mySchoolId;
 }
 
 function renderDatasetTabs() {
@@ -123,16 +124,6 @@ function getDatasetChartTitle() {
     calendar: `${schoolName} 및 주변 학교 학사일정 예시`
   };
   return titles[appState.selectedDataset];
-}
-
-function buildSelectedStandardsText() {
-  if (!appState.selectedStandards || appState.selectedStandards.length === 0) {
-    return "선택한 성취기준 없음";
-  }
-
-  return appState.selectedStandards
-    .map((std) => `- ${std.display_text || `[${std.achievement_code}] ${std.achievement_text}`}`)
-    .join("\n");
 }
 
 function getDatasetInsight() {
