@@ -1237,7 +1237,7 @@ function bindEvents() {
       startFakeProgress();
 
       const prompt = buildLessonPlanPrompt();
-      const result = await callLessonAPIStream(prompt, "plan", appState.fastMode);
+      const result = await callLessonAPI(prompt, "plan", appState.fastMode);
 
       appState.aiLessonPlan = result;
       appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
