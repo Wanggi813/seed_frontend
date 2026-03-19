@@ -757,7 +757,7 @@ function init() {
 const API_BASE =
   location.hostname === "127.0.0.1" || location.hostname === "localhost"
     ? "http://localhost:3000"
-    : "https://여기에-render-주소.onrender.com";
+    : "https://seed-backend-xso7.onrender.com";
 
 async function callLessonAPI(prompt, mode = "plan") {
   const res = await fetch(`${API_BASE}/api/generate`, {
