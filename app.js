@@ -140,9 +140,8 @@ function getDatasetChartTitle() {
     schoolEnv: `${schoolName}와 주변 학교의 학교별 환경 비교`,
     solar: `${schoolName} 및 주변 학교 태양광 설치·발전량 비교`
   };
-  return titles[appState.selectedDataset];
+  return titles[appState.selectedDataset] || "데이터 시각화";
 }
-
 function getDatasetInsight() {
   const mySchool = getMySchool();
   const district = mySchool ? mySchool.district : "생활권";
@@ -166,11 +165,14 @@ function getDatasetInsight() {
   }
 
   if (appState.selectedDataset === "schoolEnv") {
-    const rows = realLikeData.schoolEnvironment.filter((r) =>
-      getNeighborSchools().some((s) => s.schoolId === r.schoolId)
+    const latestYear = Math.max(...realLikeData.schoolEnvironment.map((r) => r.year));
+    const rows = realLikeData.schoolEnvironment.filter(
+      (r) =>
+        r.year === latestYear &&
+        getNeighborSchools().some((s) => s.schoolId === r.schoolId)
     );
-    const avg = Math.round(rows.reduce((s, r) => s + r.pm25, 0) / rows.length);
-    return `주변 학교의 학교별 환경 데이터를 보면 평균 PM2.5는 ${avg}이며, 학교별 실내환경 비교 탐구에 활용할 수 있습니다.`;
+    const avg = Math.round(rows.reduce((s, r) => s + r.pm25, 0) / Math.max(rows.length, 1));
+    return `주변 학교의 최근 학교별 PM2.5 평균은 ${avg}이며, 학교 간 환경 차이를 비교하기 좋습니다.`;
   }
 
   const solarRows = realLikeData.solarStats.filter((r) =>
@@ -206,11 +208,12 @@ function getDatasetChartData() {
   }
 
   if (appState.selectedDataset === "schoolEnv") {
-    const latestYear = 2025;
+    const latestYear = Math.max(...realLikeData.schoolEnvironment.map((r) => r.year));
     return realLikeData.schoolEnvironment
-      .filter((row) =>
-        row.year === latestYear &&
-        getNeighborSchools().some((s) => s.schoolId === row.schoolId)
+      .filter(
+        (row) =>
+          row.year === latestYear &&
+          getNeighborSchools().some((s) => s.schoolId === row.schoolId)
       )
       .map((row) => {
         const school = realLikeData.schools.find((s) => s.schoolId === row.schoolId);
@@ -225,7 +228,7 @@ function getDatasetChartData() {
     return realLikeData.solarStats
       .filter((row) => getNeighborSchools().some((s) => s.schoolId === row.schoolId))
       .map((row) => ({
-        label: `${row.schoolName} (${row.hasSolar ? "설치" : "미설치"})`,
+        label: row.schoolName,
         value: row.generationKwh || 0
       }));
   }
@@ -233,7 +236,14 @@ function getDatasetChartData() {
   return [];
 }
 
-function renderSimpleChart(targetId, data = []) {
+function escapeHtml(text = "") {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function renderBetterChart(targetId, data = [], mode = "bar") {
   const target = document.getElementById(targetId);
   if (!target) return;
 
@@ -242,33 +252,90 @@ function renderSimpleChart(targetId, data = []) {
     return;
   }
 
-  const maxValue = Math.max(...data.map(item => Number(item.value) || 0), 1);
+  const width = 760;
+  const height = 320;
+  const margin = { top: 24, right: 24, bottom: 56, left: 56 };
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+
+  const values = data.map((d) => Number(d.value) || 0);
+  const maxValue = Math.max(...values, 1);
+
+  const isLine = mode === "trend" || mode === "env" || mode === "schoolEnv";
+
+  if (isLine) {
+    const points = data.map((d, i) => {
+      const x = margin.left + (innerW * i) / Math.max(data.length - 1, 1);
+      const y = margin.top + innerH - ((Number(d.value) || 0) / maxValue) * innerH;
+      return { ...d, x, y };
+    });
+
+    const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+    target.innerHTML = `
+      <div style="overflow-x:auto;">
+        <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; background:#fff; border-radius:14px;">
+          <line x1="${margin.left}" y1="${margin.top + innerH}" x2="${margin.left + innerW}" y2="${margin.top + innerH}" stroke="#cbd5e1" />
+          <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#cbd5e1" />
+
+          ${[0, 0.25, 0.5, 0.75, 1].map((t) => {
+            const y = margin.top + innerH - t * innerH;
+            const value = Math.round(maxValue * t);
+            return `
+              <line x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#eef2f7" />
+              <text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="#64748b">${value}</text>
+            `;
+          }).join("")}
+
+          <polyline fill="none" stroke="#2563eb" stroke-width="3" points="${polyline}" />
+
+          ${points.map((p, i) => `
+            <circle cx="${p.x}" cy="${p.y}" r="4" fill="#2563eb" />
+            ${i % Math.ceil(data.length / 8) === 0 || data.length <= 8 ? `
+              <text x="${p.x}" y="${margin.top + innerH + 18}" text-anchor="middle" font-size="10" fill="#475569">
+                ${escapeHtml(p.label)}
+              </text>
+            ` : ""}
+          `).join("")}
+        </svg>
+      </div>
+    `;
+    return;
+  }
+
+  const barWidth = innerW / data.length;
 
   target.innerHTML = `
-  <div style="
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-    max-height:420px;
-    overflow-y:auto;
-    padding-right:8px;
-  ">
-      ${data.map(item => {
-    const value = Number(item.value) || 0;
-    const width = Math.max(4, (value / maxValue) * 100);
+    <div style="overflow-x:auto;">
+      <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; background:#fff; border-radius:14px;">
+        <line x1="${margin.left}" y1="${margin.top + innerH}" x2="${margin.left + innerW}" y2="${margin.top + innerH}" stroke="#cbd5e1" />
+        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#cbd5e1" />
 
-    return `
-          <div style="display:grid; grid-template-columns:120px 1fr 56px; gap:10px; align-items:center;">
-            <div style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${item.label}
-            </div>
-            <div style="background:#e9eef5; border-radius:999px; height:14px; overflow:hidden;">
-              <div style="width:${width}%; height:100%; background:#4f46e5; border-radius:999px;"></div>
-            </div>
-            <div style="font-size:13px; text-align:right;">${value}</div>
-          </div>
-        `;
-  }).join("")}
+        ${[0, 0.25, 0.5, 0.75, 1].map((t) => {
+          const y = margin.top + innerH - t * innerH;
+          const value = Math.round(maxValue * t);
+          return `
+            <line x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#eef2f7" />
+            <text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="#64748b">${value}</text>
+          `;
+        }).join("")}
+
+        ${data.map((d, i) => {
+          const value = Number(d.value) || 0;
+          const h = (value / maxValue) * innerH;
+          const x = margin.left + i * barWidth + barWidth * 0.15;
+          const y = margin.top + innerH - h;
+          const w = barWidth * 0.7;
+
+          return `
+            <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#2563eb" opacity="0.88" />
+            <text x="${x + w / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="#334155">${value}</text>
+            <text x="${x + w / 2}" y="${margin.top + innerH + 16}" text-anchor="middle" font-size="10" fill="#475569">
+              ${escapeHtml(d.label)}
+            </text>
+          `;
+        }).join("")}
+      </svg>
     </div>
   `;
 }
@@ -914,7 +981,7 @@ function renderIssueData() {
   });
 
   chartTitle.textContent = getDatasetChartTitle();
-  renderSimpleChart("simple-chart", getDatasetChartData());
+  renderBetterChart("simple-chart", getDatasetChartData(), appState.selectedDataset);
   insight.textContent = getDatasetInsight();
   renderSchoolDataTable();
 }
@@ -1020,25 +1087,111 @@ function renderLessonPlan() {
 }
 
 function renderOutputs() {
-  const lesson = appState.aiLessonPlan || getIssueContent();
-  const output = appState.aiOutputs;
+  const lesson = appState.aiLessonPlan ?? {
+    mainQuestion: "",
+    subQuestions: []
+  };
+  const output = appState.aiOutputs || {};
   const mySchool = getMySchool();
 
-  const worksheetItems = output?.worksheet || [];
-  const rubricRows = output?.rubric || [];
-  const slides = output?.slides || [];
+  const worksheetItems = Array.isArray(output.worksheet) ? output.worksheet : [];
+  const rubricRows = Array.isArray(output.rubric) ? output.rubric : [];
+  const slides = Array.isArray(output.slides) ? output.slides : [];
+
+  const normalizedWorksheet = worksheetItems.map((item, index) => {
+    if (typeof item === "string") {
+      return {
+        question: item,
+        standardCodes: []
+      };
+    }
+
+    if (item && typeof item === "object") {
+      return {
+        question: item.question || item.text || item.prompt || `문항 ${index + 1}`,
+        standardCodes: Array.isArray(item.standardCodes) ? item.standardCodes : []
+      };
+    }
+
+    return {
+      question: `문항 ${index + 1}`,
+      standardCodes: []
+    };
+  });
+
+  const fallbackWorksheet = normalizedWorksheet.length
+    ? normalizedWorksheet
+    : (lesson.subQuestions || []).map((q) => ({
+        question: q,
+        standardCodes: []
+      }));
+
+  const normalizedRubric = rubricRows.map((row) => {
+    if (Array.isArray(row)) {
+      return {
+        criterion: row[0] || "",
+        standardCodes: [],
+        high: row[1] || "",
+        mid: row[2] || "",
+        low: row[3] || ""
+      };
+    }
+
+    return {
+      criterion: row?.criterion || "",
+      standardCodes: Array.isArray(row?.standardCodes) ? row.standardCodes : [],
+      high: row?.high || "",
+      mid: row?.mid || "",
+      low: row?.low || ""
+    };
+  });
+
+  const fallbackRubric = normalizedRubric.length
+    ? normalizedRubric
+    : [
+        {
+          criterion: "데이터 해석",
+          standardCodes: [],
+          high: "자료를 비교·해석하고 근거를 제시함",
+          mid: "기본 경향을 설명함",
+          low: "자료 해석이 부분적임"
+        },
+        {
+          criterion: "문제 분석",
+          standardCodes: [],
+          high: "문제 원인과 관계를 논리적으로 설명함",
+          mid: "기본 관계를 설명함",
+          low: "분석이 단편적임"
+        },
+        {
+          criterion: "해결 방안",
+          standardCodes: [],
+          high: "실행 가능한 해결 방안을 구체적으로 제안함",
+          mid: "일반적 제안을 함",
+          low: "구체성이 부족함"
+        }
+      ];
+
+  const fallbackSlides = slides.length
+    ? slides
+    : [
+        `문제 제기: ${lesson.mainQuestion || "탐구 질문"}`,
+        "데이터 읽기",
+        "데이터 해석",
+        "해결 방안 제안"
+      ];
 
   document.getElementById("worksheet-content").innerHTML = `
     <h3>학생 활동지</h3>
     <p><strong>우리 학교:</strong> ${mySchool ? mySchool.name : "-"}</p>
-    <p><strong>핵심 질문:</strong> ${lesson.mainQuestion}</p>
+    <p><strong>핵심 질문:</strong> ${lesson.mainQuestion || "-"}</p>
     <p><strong>활용 자료:</strong> ${datasetLabels[appState.selectedDataset]}</p>
     <ol class="ordered-list">
-      ${worksheetItems.map((item) => `
+      ${fallbackWorksheet.map((item) => `
         <li>
           ${item.question}
           <div style="margin-top:4px; color:var(--sub); font-size:13px;">
-            성취기준: ${(item.standardCodes || []).join(", ")}
+            성취기준: ${item.standardCodes.length ? item.standardCodes.join(", ") : "-"}
           </div>
         </li>
       `).join("")}
@@ -1056,10 +1209,10 @@ function renderOutputs() {
       </tr>
     </thead>
     <tbody>
-      ${rubricRows.map((row) => `
+      ${fallbackRubric.map((row) => `
         <tr>
           <td>${row.criterion}</td>
-          <td>${(row.standardCodes || []).join(", ")}</td>
+          <td>${row.standardCodes.length ? row.standardCodes.join(", ") : "-"}</td>
           <td>${row.high}</td>
           <td>${row.mid}</td>
           <td>${row.low}</td>
@@ -1069,13 +1222,12 @@ function renderOutputs() {
   `;
 
   document.getElementById("slides-outline").innerHTML =
-    slides.map((item) => `<li>${item}</li>`).join("");
+    fallbackSlides.map((item) => `<li>${item}</li>`).join("");
 
-  renderSimpleChart("final-chart", getDatasetChartData());
-  document.getElementById("final-insight").textContent =
-    "선택한 학교와 생활권 데이터를 바탕으로 AI가 생성한 수업 자료입니다.";
+  document.getElementById("final-chart-title").textContent = getDatasetChartTitle();
+  renderBetterChart("final-chart", getDatasetChartData(), appState.selectedDataset);
+  document.getElementById("final-insight").textContent = getDatasetInsight();
 }
-
 function renderPromptModalContent() {
   const mySchool = getMySchool();
   const standardsText = buildSelectedStandardsText();
@@ -1159,8 +1311,7 @@ function switchTab(tabName) {
   });
 
   panes.forEach((pane) => {
-    const isMatch =
-      pane.id === `tab-${tabName}` || pane.dataset.tabContent === tabName;
+    const isMatch = pane.id === `tab-${tabName}`;
     pane.classList.toggle("active", isMatch);
     pane.style.display = isMatch ? "block" : "none";
   });
