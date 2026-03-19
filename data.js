@@ -142,3 +142,81 @@ const datasetLabels = {
   env: "생활권 환경 데이터",
   calendar: "학사일정 예시"
 };
+
+let curriculumData = null;
+
+export async function loadCurriculumData() {
+  const response = await fetch("./science_curriculum_2022_checkbox.json");
+  if (!response.ok) {
+    throw new Error("교육과정 JSON을 불러오지 못했습니다.");
+  }
+
+  curriculumData = await response.json();
+  return curriculumData;
+}
+
+export function getCurriculumData() {
+  return curriculumData;
+}
+
+export function getSchoolLevels() {
+  if (!curriculumData) return [];
+  return [...new Set(curriculumData.courses.map(c => c.school_level))];
+}
+
+export function getCoursesBySchoolLevel(schoolLevel = "") {
+  if (!curriculumData) return [];
+
+  let courses = curriculumData.courses;
+  if (schoolLevel) {
+    courses = courses.filter(c => c.school_level === schoolLevel);
+  }
+
+  return [...new Set(courses.map(c => c.course))];
+}
+
+export function getFilteredCourses({ schoolLevel = "", course = "" } = {}) {
+  if (!curriculumData) return [];
+
+  let filtered = curriculumData.courses;
+
+  if (schoolLevel) {
+    filtered = filtered.filter(c => c.school_level === schoolLevel);
+  }
+
+  if (course) {
+    filtered = filtered.filter(c => c.course === course);
+  }
+
+  return filtered;
+}
+
+export function getSelectedStandards() {
+  const checked = document.querySelectorAll(".standard-checkbox:checked");
+
+  return Array.from(checked).map(el => ({
+    school_level: el.dataset.schoolLevel,
+    course: el.dataset.course,
+    unit: el.dataset.unit,
+    achievement_code: el.dataset.code,
+    achievement_text: el.dataset.text,
+    display_text: el.dataset.display
+  }));
+}
+
+export function buildStandardsPrompt() {
+  const selected = getSelectedStandards();
+
+  if (selected.length === 0) return "";
+
+  const lines = selected.map(
+    std => `- ${std.achievement_code}: ${std.achievement_text}`
+  );
+
+  return [
+    "다음 성취기준을 반드시 반영하여 작성하라.",
+    "",
+    "[성취기준]",
+    ...lines
+  ].join("\n");
+}

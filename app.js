@@ -1,3 +1,4 @@
+
 const appState = {
   lastImprovedPrompt: "",
   schoolLevel: "중학교",
@@ -13,6 +14,8 @@ const appState = {
   aiOutputs: null,
   fastMode: true,
   loadingTimer: null,
+  selectedStandards: [],
+  curriculumData: null,
 };
 
 
@@ -227,8 +230,8 @@ function buildOutputsPrompt() {
 - 하위 질문: ${(lesson?.subQuestions || []).join(" | ")}
 - 수업 목표: ${(lesson?.lessonGoals || []).join(" | ")}
 - 수업 흐름: ${(lesson?.lessonFlow || [])
-    .map((x) => `${x.title}: ${(x.activities || []).join(", ")}`)
-    .join(" | ")}
+      .map((x) => `${x.title}: ${(x.activities || []).join(", ")}`)
+      .join(" | ")}
 
 이 수업안에 어울리는 실제 수업 자료를 만든다.
 학생 활동지 문항은 학생들이 직접 답하고 토의할 수 있도록 구체적으로 쓰고,
@@ -293,6 +296,165 @@ function startFakeProgress() {
     idx = Math.min(idx + 1, labels.length - 1);
     updateLoadingProgress(labels[idx], idx);
   }, 1400);
+}
+
+async function loadCurriculumJson() {
+  const res = await fetch("./science_curriculum_2022_checkbox.json");
+  if (!res.ok) throw new Error("교육과정 JSON을 불러오지 못했습니다.");
+  return await res.json();
+}
+
+function getSelectedStandardsFromUI() {
+  const checked = document.querySelectorAll(".standard-checkbox:checked");
+
+  return Array.from(checked).map((el) => ({
+    achievement_code: el.dataset.code,
+    achievement_text: el.dataset.text,
+    display_text: el.dataset.display,
+    course: el.dataset.course,
+    unit: el.dataset.unit,
+    school_level: el.dataset.schoolLevel
+  }));
+}
+
+function buildStandardsPrompt() {
+  const selected = getSelectedStandardsFromUI();
+  appState.selectedStandards = selected;
+
+  if (!selected.length) return "";
+
+  const lines = selected.map(
+    (item) => `- ${item.achievement_code}: ${item.achievement_text}`
+  );
+
+  return [
+    "다음 성취기준을 반드시 반영하여 작성하라.",
+    "",
+    "[성취기준]",
+    ...lines,
+    ""
+  ].join("\n");
+}
+
+function updateSelectedStandardsPreview() {
+  const preview = document.getElementById("selectedStandardsPreview");
+  if (!preview) return;
+
+  const selected = getSelectedStandardsFromUI();
+  appState.selectedStandards = selected;
+
+  if (!selected.length) {
+    preview.textContent = "아직 선택된 성취기준이 없습니다.";
+    return;
+  }
+
+  preview.innerHTML = selected
+    .map((item) => `<div class="selected-standard-item">${item.display_text}</div>`)
+    .join("");
+}
+
+function populateCurriculumCourseSelect() {
+  const select = document.getElementById("curriculum-course");
+  if (!select || !appState.curriculumData) return;
+
+  const matchedCourses = appState.curriculumData.courses.filter(
+    (course) => course.school_level === appState.schoolLevel
+  );
+
+  select.innerHTML = `<option value="">전체</option>`;
+
+  matchedCourses.forEach((courseObj) => {
+    const option = document.createElement("option");
+    option.value = courseObj.course;
+    option.textContent = courseObj.course;
+    select.appendChild(option);
+  });
+}
+
+function renderCurriculumStandards() {
+  const area = document.getElementById("curriculumArea");
+  const courseSelect = document.getElementById("curriculum-course");
+
+  if (!area || !appState.curriculumData) return;
+
+  area.innerHTML = "";
+
+  let courses = appState.curriculumData.courses.filter(
+    (course) => course.school_level === appState.schoolLevel
+  );
+
+  const selectedCourse = courseSelect?.value || "";
+  if (selectedCourse) {
+    courses = courses.filter((course) => course.course === selectedCourse);
+  }
+
+  if (!courses.length) {
+    area.innerHTML = `<p>표시할 성취기준이 없습니다.</p>`;
+    updateSelectedStandardsPreview();
+    return;
+  }
+
+  courses.forEach((courseObj) => {
+    const courseBlock = document.createElement("div");
+    courseBlock.className = "course-block";
+
+    const courseTitle = document.createElement("h3");
+    courseTitle.textContent = `${courseObj.school_level} · ${courseObj.course}`;
+    courseBlock.appendChild(courseTitle);
+
+    courseObj.units.forEach((unitObj) => {
+      const unitBlock = document.createElement("div");
+      unitBlock.className = "unit-block";
+
+      const unitTitle = document.createElement("div");
+      unitTitle.className = "unit-title";
+      unitTitle.textContent = unitObj.unit;
+      unitBlock.appendChild(unitTitle);
+
+      unitObj.standards.forEach((std) => {
+        const label = document.createElement("label");
+        label.className = "standard-label";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "standard-checkbox";
+        checkbox.dataset.code = std.achievement_code;
+        checkbox.dataset.text = std.achievement_text;
+        checkbox.dataset.display = std.display_text;
+        checkbox.dataset.course = courseObj.course;
+        checkbox.dataset.unit = unitObj.unit;
+        checkbox.dataset.schoolLevel = courseObj.school_level;
+
+        const alreadySelected = appState.selectedStandards.some(
+          (item) => item.achievement_code === std.achievement_code
+        );
+        checkbox.checked = alreadySelected;
+
+        checkbox.addEventListener("change", updateSelectedStandardsPreview);
+
+        label.appendChild(checkbox);
+        label.append(` ${std.display_text}`);
+
+        unitBlock.appendChild(label);
+      });
+
+      courseBlock.appendChild(unitBlock);
+    });
+
+    area.appendChild(courseBlock);
+  });
+
+  updateSelectedStandardsPreview();
+}
+
+async function initCurriculum() {
+  try {
+    appState.curriculumData = await loadCurriculumJson();
+    populateCurriculumCourseSelect();
+    renderCurriculumStandards();
+  } catch (error) {
+    console.error("교육과정 로딩 실패:", error);
+  }
 }
 
 
@@ -799,7 +961,16 @@ function bindEvents() {
     appState.schoolLevel = e.target.value;
     populateSubjectSelect();
     populateSchoolSelect();
+
+    appState.selectedStandards = [];
+    populateCurriculumCourseSelect();
+    renderCurriculumStandards();
   });
+
+  document.getElementById("curriculum-course")?.addEventListener("change", () => {
+    renderCurriculumStandards();
+  });
+
 
   document.getElementById("start-design-btn").addEventListener("click", () => {
     updateStateFromForm();
@@ -820,70 +991,80 @@ function bindEvents() {
     });
   });
 
- document.getElementById("generate-plan-btn").addEventListener("click", async () => {
-  const btn = document.getElementById("generate-plan-btn");
+  document.getElementById("generate-plan-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("generate-plan-btn");
 
-  try {
-    btn.disabled = true;
-    btn.textContent = "AI 수업안 생성 중...";
+    try {
+      btn.disabled = true;
+      btn.textContent = "AI 수업안 생성 중...";
 
-    setLoadingState(true, "AI가 수업안을 설계하고 있습니다", [
-      "조건 확인",
-      "데이터 연결",
-      "수업안 생성",
-      "결과 정리"
-    ]);
-    startFakeProgress();
+      setLoadingState(true, "AI가 수업안을 설계하고 있습니다", [
+        "조건 확인",
+        "데이터 연결",
+        "수업안 생성",
+        "결과 정리"
+      ]);
+      startFakeProgress();
 
-    const prompt = buildLessonPlanPrompt();
-    const result = await callLessonAPIStream(prompt, "plan", appState.fastMode);
+      const standardsPrompt = buildStandardsPrompt();
+      const basePrompt = buildLessonPlanPrompt();
+      const prompt = standardsPrompt
+        ? `${standardsPrompt}\n\n${basePrompt}`
+        : basePrompt;
 
-    appState.aiLessonPlan = result;
-    appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
-    renderLessonPlan();
-    showScreen(3);
-  } catch (err) {
-    alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
-  } finally {
-    setLoadingState(false);
-    btn.disabled = false;
-    btn.textContent = "이 주제로 수업 설계하기";
-  }
-});
+      const result = await callLessonAPIStream(prompt, "plan", appState.fastMode);
 
- document.getElementById("generate-output-btn").addEventListener("click", async () => {
-  const btn = document.getElementById("generate-output-btn");
-
-  try {
-    btn.disabled = true;
-    btn.textContent = "산출물 생성 중...";
-
-    if (!appState.aiLessonPlan) {
-      throw new Error("먼저 AI 수업안을 생성해야 합니다.");
+      appState.aiLessonPlan = result;
+      appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
+      renderLessonPlan();
+      showScreen(3);
+    } catch (err) {
+      alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      setLoadingState(false);
+      btn.disabled = false;
+      btn.textContent = "이 주제로 수업 설계하기";
     }
+  });
 
-    setLoadingState(true, "AI가 수업 자료를 만들고 있습니다", [
-      "수업안 읽기",
-      "활동지 생성",
-      "루브릭 생성",
-      "발표자료 정리"
-    ]);
-    startFakeProgress();
+  document.getElementById("generate-output-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("generate-output-btn");
 
-    const prompt = buildOutputsPrompt();
-    const result = await callLessonAPIStream(prompt, "output", appState.fastMode);
+    try {
+      btn.disabled = true;
+      btn.textContent = "산출물 생성 중...";
 
-    appState.aiOutputs = result;
-    renderOutputs();
-    showScreen(4);
-  } catch (err) {
-    alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
-  } finally {
-    setLoadingState(false);
-    btn.disabled = false;
-    btn.textContent = "수업 산출물 생성";
-  }
-});
+      if (!appState.aiLessonPlan) {
+        throw new Error("먼저 AI 수업안을 생성해야 합니다.");
+      }
+
+      setLoadingState(true, "AI가 수업 자료를 만들고 있습니다", [
+        "수업안 읽기",
+        "활동지 생성",
+        "루브릭 생성",
+        "발표자료 정리"
+      ]);
+      startFakeProgress();
+
+      const standardsPrompt = buildStandardsPrompt();
+      const basePrompt = buildOutputsPrompt();
+      const prompt = standardsPrompt
+        ? `${standardsPrompt}\n\n${basePrompt}`
+        : basePrompt;
+
+      const result = await callLessonAPIStream(prompt, "output", appState.fastMode);
+
+      appState.aiOutputs = result;
+      renderOutputs();
+      showScreen(4);
+    } catch (err) {
+      alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      setLoadingState(false);
+      btn.disabled = false;
+      btn.textContent = "수업 산출물 생성";
+    }
+  });
 
   document.getElementById("open-ai-modal-btn").addEventListener("click", openModal);
   document.getElementById("close-ai-modal-btn").addEventListener("click", closeModal);
@@ -917,13 +1098,14 @@ function renderDatasetTabs() {
   });
 }
 
-function init() {
+async function init() {
   populateSubjectSelect();
   populateSchoolSelect();
   renderDatasetTabs();
   renderIssueData();
   renderSchoolDataTable();
   bindEvents();
+  await initCurriculum();
 }
 
 const API_BASE =
