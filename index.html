@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>수업생성 플랫폼 씨앗</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div>
+        <h1>🌱 수업생성 플랫폼 씨앗</h1>
+        <p class="subtitle">교육 공공데이터와 AI를 활용해 지역문제 해결형 탐구수업을 자동 설계합니다.</p>
+      </div>
+      <div class="header-badge">Prototype</div>
+    </div>
+  </header>
+
+  <nav class="stepper">
+    <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">수업 조건 입력</span></div>
+    <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">지역문제·자료 선택</span></div>
+    <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">AI 수업 설계</span></div>
+    <div class="step" data-step="4"><span class="step-num">4</span><span class="step-label">산출물 생성</span></div>
+  </nav>
+
+  <main id="app">
+    <!-- SCREEN 1 -->
+    <section id="screen-1" class="screen active">
+      <div class="screen-header">
+        <h2>어떤 수업을 만들고 싶으신가요?</h2>
+        <p>학교 조건과 수업 목표를 입력하면 씨앗이 맞춤형 탐구수업을 설계합니다.</p>
+      </div>
+
+      <div class="card">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="school-level">학교급</label>
+            <select id="school-level">
+              <option value="중학교" selected>중학교</option>
+              <option value="고등학교">고등학교</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="subject">과목</label>
+            <select id="subject"></select>
+          </div>
+
+          <div class="form-group">
+            <label for="my-school">우리 학교</label>
+            <select id="my-school"></select>
+          </div>
+
+          <div class="form-group">
+            <label for="class-type">수업 형태</label>
+            <select id="class-type">
+              <option value="1차시">1차시</option>
+              <option value="2차시" selected>2차시</option>
+              <option value="프로젝트형">프로젝트형</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="equipment">기자재 환경</label>
+            <select id="equipment">
+              <option value="충분함">충분함</option>
+              <option value="제한적임" selected>제한적임</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="goal">수업 목표</label>
+            <select id="goal">
+              <option value="지역문제 해결 중심" selected>지역문제 해결 중심</option>
+              <option value="데이터 탐구 중심">데이터 탐구 중심</option>
+              <option value="협업 중심">협업 중심</option>
+              <option value="발표 중심">발표 중심</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="level">학생 참여 수준</label>
+            <select id="level">
+              <option value="기본형">기본형</option>
+              <option value="표준형" selected>표준형</option>
+              <option value="심화형">심화형</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button id="start-design-btn" class="primary-btn">수업 설계 시작</button>
+      </div>
+    </section>
+
+    <!-- SCREEN 2 -->
+    <section id="screen-2" class="screen">
+      <div class="screen-header">
+        <h2>지역문제와 활용 자료를 선택하세요</h2>
+        <p>우리 학교와 주변 학교, 생활권 데이터를 연결해 탐구수업의 근거를 구성합니다.</p>
+      </div>
+
+      <div class="summary-box" id="input-summary"></div>
+
+      <div class="issue-grid">
+        <button class="issue-card selected" data-issue="dust">
+          <h3>미세먼지</h3>
+          <p>우리 학교 생활권의 대기 환경과 학교 환경을 함께 비교합니다.</p>
+        </button>
+        <button class="issue-card" data-issue="safety">
+          <h3>통학 안전</h3>
+          <p>우리 학교와 주변 학교 규모를 바탕으로 통학 환경을 분석합니다.</p>
+        </button>
+        <button class="issue-card" data-issue="students">
+          <h3>학생 수 변화</h3>
+          <p>생활권 학생 수 추이와 학교 환경 변화를 연결합니다.</p>
+        </button>
+        <button class="issue-card" data-issue="energy">
+          <h3>에너지 사용</h3>
+          <p>학교 규모와 시설 수를 바탕으로 에너지 문제를 탐구합니다.</p>
+        </button>
+        <button class="issue-card" data-issue="green">
+          <h3>녹지 환경</h3>
+          <p>생활권 환경 특성과 학교 분포를 함께 해석합니다.</p>
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <h3>활용 자료 선택</h3>
+        <div class="dataset-tabs" id="dataset-tabs"></div>
+      </div>
+
+      <div class="content-grid two-column">
+        <div class="card">
+          <h3>추천 데이터</h3>
+          <div id="data-recommendations"></div>
+        </div>
+
+        <div class="card">
+          <h3 id="preview-chart-title">데이터 미리보기</h3>
+          <div class="chart-box">
+            <div id="simple-chart" class="simple-chart"></div>
+          </div>
+          <p id="preview-insight" class="insight-text"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>예상 탐구 질문</h3>
+        <ul id="question-preview-list" class="bullet-list"></ul>
+      </div>
+
+      <div class="action-row" style="justify-content:flex-start; margin-top:14px;">
+        <button id="toggle-school-data-btn" class="ghost-btn">학교 데이터 보기</button>
+      </div>
+
+      <div id="school-data-panel" class="card" style="display:none; margin-top:16px;">
+        <h3>우리 학교 및 주변 학교 데이터</h3>
+        <p id="school-panel-desc" style="color:var(--sub); margin-top:0;"></p>
+        <div style="overflow-x:auto;">
+          <table id="school-data-table" class="rubric-table"></table>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="secondary-btn" data-prev="1">이전</button>
+        <button id="generate-plan-btn" class="primary-btn">이 주제로 수업 설계하기</button>
+      </div>
+    </section>
+
+    <!-- SCREEN 3 -->
+    <section id="screen-3" class="screen">
+      <div class="screen-header">
+        <h2>AI가 설계한 탐구수업안</h2>
+        <p>입력한 조건과 선택한 지역문제를 바탕으로 수업 구조를 생성했습니다.</p>
+      </div>
+
+      <div class="summary-box" id="design-summary"></div>
+
+      <div class="hero-question card">
+        <h3>핵심 탐구 질문</h3>
+        <p id="main-question" class="main-question"></p>
+      </div>
+
+      <div class="content-grid two-column">
+        <div class="card">
+          <h3>하위 질문</h3>
+          <ul id="sub-questions" class="bullet-list"></ul>
+        </div>
+        <div class="card">
+          <h3>수업 목표</h3>
+          <ul id="lesson-goals" class="bullet-list"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>차시별 수업 흐름</h3>
+        <div id="lesson-flow" class="timeline"></div>
+      </div>
+
+      <div class="card">
+        <h3>교사 지원 포인트</h3>
+        <ul class="bullet-list">
+          <li>학생 활동지 자동 생성</li>
+          <li>평가 루브릭 자동 생성</li>
+          <li>발표자료 초안 제공</li>
+          <li>AI 생성 기준 확인 가능</li>
+        </ul>
+      </div>
+
+      <div class="action-row">
+        <button class="secondary-btn" data-prev="2">이전</button>
+        <button id="open-ai-modal-btn" class="ghost-btn">AI 생성 기준 보기</button>
+        <button id="generate-output-btn" class="primary-btn">수업 산출물 생성</button>
+      </div>
+    </section>
+
+    <!-- SCREEN 4 -->
+    <section id="screen-4" class="screen">
+      <div class="screen-header">
+        <h2>바로 활용 가능한 수업 자료가 생성되었습니다</h2>
+        <p>탐구수업 실행에 필요한 핵심 자료를 한 번에 제공합니다.</p>
+      </div>
+
+      <div class="output-tabs">
+        <button class="tab-btn active" data-tab="worksheet">학생 활동지</button>
+        <button class="tab-btn" data-tab="rubric">평가 루브릭</button>
+        <button class="tab-btn" data-tab="slides">발표자료 초안</button>
+        <button class="tab-btn" data-tab="viz">데이터 시각화</button>
+      </div>
+
+      <div class="tab-content active" id="tab-worksheet">
+        <div class="card" id="worksheet-content"></div>
+      </div>
+
+      <div class="tab-content" id="tab-rubric">
+        <div class="card">
+          <table id="rubric-table" class="rubric-table"></table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-slides">
+        <div class="card">
+          <ol id="slides-outline" class="ordered-list"></ol>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-viz">
+        <div class="card">
+          <h3 id="final-chart-title">시각화 결과</h3>
+          <div class="chart-box">
+            <div id="final-chart" class="simple-chart"></div>
+          </div>
+          <p id="final-insight" class="insight-text"></p>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="secondary-btn" data-prev="3">이전</button>
+        <button id="save-pdf-btn" class="ghost-btn">PDF로 저장</button>
+        <button id="restart-btn" class="primary-btn">다른 지역문제로 새로 만들기</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="ai-modal" class="modal hidden">
+    <div class="modal-overlay" id="close-modal-overlay"></div>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2>씨앗의 AI 수업 생성 과정</h2>
+        <button id="close-ai-modal-btn" class="close-btn">✕</button>
+      </div>
+
+      <p class="modal-intro">
+        씨앗은 입력된 수업 조건과 교육 공공데이터를 바탕으로
+        <strong>탐구 질문 → 수업 구조 → 실행 자료</strong>를 단계적으로 생성합니다.
+      </p>
+
+      <div class="prompt-step">
+        <h3>1단계. 탐구 질문 생성</h3>
+        <div id="prompt-step-1-meta" class="prompt-meta"></div>
+        <blockquote id="prompt-step-1" class="prompt-box"></blockquote>
+      </div>
+
+      <div class="prompt-step">
+        <h3>2단계. 수업 구조 설계</h3>
+        <div id="prompt-step-2-meta" class="prompt-meta"></div>
+        <blockquote id="prompt-step-2" class="prompt-box"></blockquote>
+      </div>
+
+      <div class="prompt-step">
+        <h3>3단계. 실행 자료 생성</h3>
+        <div id="prompt-step-3-meta" class="prompt-meta"></div>
+        <blockquote id="prompt-step-3" class="prompt-box"></blockquote>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <p>활용 데이터 예시: 학교알리미 · 교육통계서비스 · 나이스 교육정보 개방포털</p>
+    <p>본 화면은 “수업생성 플랫폼 씨앗”의 기획 시연용 프로토타입입니다.</p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="ui.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
