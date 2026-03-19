@@ -354,9 +354,9 @@ function buildOutputsPrompt() {
 - 핵심 탐구 질문: ${lesson?.mainQuestion || ""}
 - 하위 질문: ${(lesson?.subQuestions || []).join(" | ")}
 - 수업 목표: ${(lesson?.lessonGoals || []).join(" | ")}
-- 수업 흐름: ${(lesson?.lessonFlow || [])
-      .map((x) => `${x.title}: ${(x.activities || []).join(", ")}`)
-      .join(" | ")}
+- 수업 흐름 요약: ${(lesson?.lessonFlow || [])
+  .map((x) => x.title)
+  .join(" → ")}
 
 ${standardsBlock}
 
@@ -921,12 +921,12 @@ function renderIssueData() {
 
 function renderLessonPlan() {
   const content = appState.aiLessonPlan ?? {
-  mainQuestion: "AI 수업안이 아직 생성되지 않았습니다.",
-  subQuestions: [],
-  lessonGoals: [],
-  lessonFlow: [],
-  standardLinks: []
-};
+    mainQuestion: "AI 수업안이 아직 생성되지 않았습니다.",
+    subQuestions: [],
+    lessonGoals: [],
+    lessonFlow: [],
+    standardLinks: []
+  };
   const mySchool = getMySchool();
   const neighbors = getNeighborSchools();
 
@@ -1272,7 +1272,7 @@ function bindEvents() {
       startFakeProgress();
 
       const prompt = buildOutputsPrompt();
-      const result = await callLessonAPIStream(prompt, "output", appState.fastMode);
+      const result = await callLessonAPI(prompt, "output", appState.fastMode);
 
       appState.aiOutputs = result;
       renderOutputs();
