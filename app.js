@@ -1,4 +1,5 @@
 const appState = {
+  lastImprovedPrompt: "",
   schoolLevel: "중학교",
   subject: "1학년 과학",
   classType: "2차시",
@@ -176,38 +177,29 @@ function buildLessonPlanPrompt() {
   const neighbors = getNeighborSchools();
 
   return `
-당신은 한국 중등 교사를 위한 탐구수업 설계 전문가이다.
+한 중등 교사가 지역 데이터를 활용한 탐구수업을 설계하려고 한다.
 
-[수업 조건]
-학교급: ${appState.schoolLevel}
-과목: ${appState.subject}
-수업 형태: ${appState.classType}
-기자재 환경: ${appState.equipment}
-수업 목표: ${appState.goal}
-학생 참여 수준: ${appState.level}
+수업 조건은 다음과 같다.
+- 학교급: ${appState.schoolLevel}
+- 과목: ${appState.subject}
+- 수업 형태: ${appState.classType}
+- 기자재 환경: ${appState.equipment}
+- 수업 목표: ${appState.goal}
+- 학생 참여 수준: ${appState.level}
 
-[학교 정보]
-우리 학교: ${mySchool ? mySchool.name : "-"}
-생활권: ${mySchool ? mySchool.district : "-"}
-비교 가능한 주변 학교 수: ${neighbors.length}개교
+학교와 지역 맥락은 다음과 같다.
+- 우리 학교: ${mySchool ? mySchool.name : "-"}
+- 생활권: ${mySchool ? mySchool.district : "-"}
+- 비교 가능한 주변 학교 수: ${neighbors.length}개교
+- 선택한 지역문제: ${issue.title}
+- 선택한 데이터: ${datasetName}
+- 데이터 해석 포인트: ${chartInsight}
 
-[선택한 지역문제]
-주제: ${issue.title}
-
-[선택한 데이터]
-데이터 유형: ${datasetName}
-데이터 해석 포인트: ${chartInsight}
-
-다음을 JSON으로만 출력하라.
-{
-  "mainQuestion": "문자열",
-  "subQuestions": ["문자열", "문자열", "문자열"],
-  "lessonGoals": ["문자열", "문자열", "문자열"],
-  "lessonFlow": [
-    { "title": "문자열", "text": "문자열" },
-    { "title": "문자열", "text": "문자열" }
-  ]
-}
+이 조건을 바탕으로 학생들이 실제로 탐구해 볼 만한 수업안을 설계한다.
+질문은 학생의 호기심이 살아 있도록 만들고,
+수업 목표는 관찰, 비교, 해석, 제안 같은 활동 중심으로 제시하며,
+차시 흐름은 실제 교실에서 자연스럽게 이어지는 형태로 구성한다.
+지역 문제와 학교 생활의 연결도 분명하게 드러나야 한다.
 `;
 }
 
@@ -217,33 +209,27 @@ function buildOutputsPrompt() {
   const mySchool = getMySchool();
 
   return `
-당신은 한국 중등 교사를 위한 수업자료 생성 전문가이다.
+한 중등 교사가 아래 수업안을 바탕으로 실제 수업 자료를 만들려고 한다.
 
-[기본 정보]
-학교급: ${appState.schoolLevel}
-과목: ${appState.subject}
-우리 학교: ${mySchool ? mySchool.name : "-"}
-지역문제: ${issue.title}
-활용 자료: ${datasetLabels[appState.selectedDataset]}
+기본 정보:
+- 학교급: ${appState.schoolLevel}
+- 과목: ${appState.subject}
+- 우리 학교: ${mySchool ? mySchool.name : "-"}
+- 지역문제: ${issue.title}
+- 활용 자료: ${datasetLabels[appState.selectedDataset]}
 
-[이미 생성된 수업안]
-핵심 탐구 질문: ${lesson?.mainQuestion || ""}
-하위 질문: ${(lesson?.subQuestions || []).join(" | ")}
-수업 목표: ${(lesson?.lessonGoals || []).join(" | ")}
-수업 흐름: ${(lesson?.lessonFlow || [])
+이미 설계된 수업안:
+- 핵심 탐구 질문: ${lesson?.mainQuestion || ""}
+- 하위 질문: ${(lesson?.subQuestions || []).join(" | ")}
+- 수업 목표: ${(lesson?.lessonGoals || []).join(" | ")}
+- 수업 흐름: ${(lesson?.lessonFlow || [])
       .map((x) => `${x.title}: ${x.text}`)
       .join(" | ")}
 
-다음을 JSON으로만 출력하라.
-{
-  "worksheet": ["문항1", "문항2", "문항3", "문항4"],
-  "rubric": [
-    ["평가요소", "상", "중", "하"],
-    ["평가요소", "상", "중", "하"],
-    ["평가요소", "상", "중", "하"]
-  ],
-  "slides": ["슬라이드1", "슬라이드2", "슬라이드3", "슬라이드4", "슬라이드5"]
-}
+이 수업안에 어울리는 실제 수업 자료를 만든다.
+학생 활동지 문항은 학생들이 직접 답하고 토의할 수 있도록 구체적으로 쓰고,
+평가 루브릭은 수행 결과를 관찰할 수 있는 표현으로 만들며,
+발표자료 개요는 문제 제기부터 해석, 제안까지 흐름이 자연스럽게 이어지도록 한다.
 `;
 }
 
@@ -278,12 +264,26 @@ function getIssueContent() {
       ],
       lessonFlow: [
         {
-          title: "1차시 · 우리 학교와 생활권 데이터 이해",
-          text: `${district}의 PM2.5 데이터와 ${schoolName} 및 주변 학교 데이터를 바탕으로 탐구 질문과 가설을 설정한다.`
+          title: "1차시 · 우리 생활권의 미세먼지, 어떤 특징이 있을까?",
+          goal: "생활권의 미세먼지 데이터와 학교 주변 환경을 연결해 문제 상황을 이해한다.",
+          activities: [
+            `${district}의 월별 PM2.5 데이터를 살펴보고 변화 경향을 찾는다.`,
+            `${schoolName}와 주변 학교의 규모 및 과학실 수를 비교하며 탐구 환경 차이를 정리한다.`,
+            "미세먼지 변화가 학생 생활과 수업 환경에 어떤 영향을 줄 수 있을지 모둠별로 추론한다."
+          ],
+          wrapUp: "지역 환경 데이터와 학교 환경 자료를 함께 보면 문제를 더 입체적으로 해석할 수 있음을 정리한다.",
+          nextConnection: "다음 차시에서 미세먼지 문제의 원인을 해석하고 학생 실천 방안을 구체적으로 제안한다."
         },
         {
-          title: "2차시 · 비교 분석과 해결 방안 제안",
-          text: `생활권 환경 데이터와 학교 비교 데이터를 해석한 뒤 해결 방안을 발표한다.`
+          title: "2차시 · 미세먼지 문제를 줄이기 위한 실천 방안은 무엇일까?",
+          goal: "미세먼지 문제를 해석하고 학생이 실천할 수 있는 해결 방안을 제안한다.",
+          activities: [
+            "전 차시의 데이터 해석 결과를 바탕으로 미세먼지 문제의 주요 원인을 정리한다.",
+            "우리 학교와 생활권에서 실천 가능한 대응 방법을 개인, 학교, 지역 수준으로 나누어 생각한다.",
+            "모둠별 해결 방안을 발표하고 다른 모둠의 의견과 비교해 보완한다."
+          ],
+          wrapUp: "데이터 해석을 바탕으로 한 해결 방안이 더 설득력 있는 제안이 될 수 있음을 확인한다.",
+          nextConnection: "환경 문제를 생활 속 실천 과제와 연결하는 후속 탐구로 확장할 수 있다."
         }
       ]
     },
@@ -313,12 +313,26 @@ function getIssueContent() {
       ],
       lessonFlow: [
         {
-          title: "1차시 · 우리 학교와 주변 학교 비교",
-          text: `${schoolName}와 주변 학교의 학생 수를 비교하여 통학 혼잡 가능성을 예측한다.`
+          title: "1차시 · 우리 학교 통학 환경은 얼마나 안전할까?",
+          goal: "우리 학교와 주변 학교의 규모를 비교하며 통학 안전 문제를 예측한다.",
+          activities: [
+            `${schoolName}와 주변 학교의 학생 수를 비교해 통학 혼잡 가능성을 살펴본다.`,
+            "학생 수가 많은 학교일수록 어떤 통학 위험 요소가 생길 수 있을지 모둠별로 정리한다.",
+            "학교 규모와 통학 환경 사이의 관계를 뒷받침할 수 있는 근거를 찾아본다."
+          ],
+          wrapUp: "학교 규모는 통학 안전 문제를 예상하는 하나의 중요한 단서가 될 수 있음을 정리한다.",
+          nextConnection: "다음 차시에서 생활권 학생 수 변화를 연결해 통학 문제를 더 넓은 관점에서 해석한다."
         },
         {
-          title: "2차시 · 생활권 학생 수 변화와 연결",
-          text: `${district}의 학생 수 추이를 해석하여 통학 문제와 연결하고 개선 방안을 설계한다.`
+          title: "2차시 · 더 안전한 통학 환경을 만들려면?",
+          goal: "생활권 변화와 통학 문제를 연결해 학생 관점의 개선 방안을 제안한다.",
+          activities: [
+            `${district}의 학생 수 변화 추이를 살펴보며 통학 환경 변화 가능성을 해석한다.`,
+            "통학 시간, 혼잡 구간, 보행 안전 등 실제 문제 상황을 가정해 해결 방안을 구상한다.",
+            "모둠별로 안전 개선 아이디어를 발표하고 실천 가능성을 함께 검토한다."
+          ],
+          wrapUp: "통학 안전 문제는 학교 안의 문제가 아니라 지역 사회 환경과 연결된 문제임을 확인한다.",
+          nextConnection: "학생 생활과 밀접한 다른 지역 문제 탐구로 이어질 수 있다."
         }
       ]
     },
@@ -348,12 +362,26 @@ function getIssueContent() {
       ],
       lessonFlow: [
         {
-          title: "1차시 · 생활권 학생 수 추세 읽기",
-          text: `${district}의 학생 수 변화를 비교하며 핵심 질문을 만든다.`
+          title: "1차시 · 우리 생활권의 학생 수는 어떻게 변하고 있을까?",
+          goal: "생활권 학생 수 추이를 읽고 변화의 특징을 설명한다.",
+          activities: [
+            `${district}의 최근 학생 수 데이터를 비교하며 증가 또는 감소 추세를 파악한다.`,
+            "변화가 두드러지는 시점이 있는지 확인하고 그 이유를 모둠별로 추론한다.",
+            "학생 수 변화가 학교 운영과 교육환경에 어떤 영향을 줄 수 있을지 예측한다."
+          ],
+          wrapUp: "학생 수 변화는 단순한 숫자 변화가 아니라 학교 환경 변화와 연결되는 중요한 자료임을 정리한다.",
+          nextConnection: "다음 차시에서 우리 학교와 주변 학교의 환경 차이를 함께 살펴보며 교육환경 문제로 확장한다."
         },
         {
-          title: "2차시 · 주변 학교 환경과 연결",
-          text: `${schoolName}와 주변 학교의 규모 및 과학실 수를 참고해 교육환경 변화를 분석한다.`
+          title: "2차시 · 학생 수 변화는 학교 교육환경과 어떤 관련이 있을까?",
+          goal: "학교 환경 자료를 활용해 학생 수 변화가 교육환경에 미치는 영향을 해석한다.",
+          activities: [
+            `${schoolName}와 주변 학교의 학생 수, 교원 수, 과학실 수를 비교한다.`,
+            "학생 수 변화가 수업 환경, 시설 활용, 교육 기회에 어떤 영향을 줄 수 있을지 토의한다.",
+            "지역 교육환경을 유지하거나 개선하기 위한 방안을 모둠별로 제안한다."
+          ],
+          wrapUp: "학생 수 변화는 교육환경의 질과 연결되므로 지역 차원의 해석이 필요함을 확인한다.",
+          nextConnection: "지역 교육 문제 해결을 위한 제안 활동이나 정책 제안형 탐구로 이어질 수 있다."
         }
       ]
     },
@@ -383,12 +411,26 @@ function getIssueContent() {
       ],
       lessonFlow: [
         {
-          title: "1차시 · 학교 시설 비교",
-          text: `${schoolName}와 주변 학교의 학생 수, 교실 수, 시설 수를 바탕으로 에너지 사용 요인을 정리한다.`
+          title: "1차시 · 우리 학교 에너지, 얼마나 쓰고 있을까?",
+          goal: "학교별 에너지 사용 데이터를 비교하고 차이의 원인을 추론한다.",
+          activities: [
+            "우리 학교와 주변 학교의 에너지 사용 데이터를 비교한다.",
+            "학생 수, 교실 수, 시설 수를 연결해 사용 차이를 해석한다.",
+            "모둠별로 주요 특징과 원인을 정리해 발표한다."
+          ],
+          wrapUp: "학교 규모와 시설 환경이 에너지 사용에 영향을 줄 수 있음을 정리한다.",
+          nextConnection: "다음 차시에서 우리 학교의 에너지 절감 방안을 구체적으로 설계한다."
         },
         {
-          title: "2차시 · 절감 방안 설계",
-          text: `에너지 사용 가능성이 높은 학교 환경을 분석하고 학생 실천 방안을 설계한다.`
+          title: "2차시 · 우리 학교를 위한 에너지 히어로!",
+          goal: "에너지 낭비 요인을 찾고 실천 가능한 절감 방안을 제안한다.",
+          activities: [
+            "우리 학교에서 에너지가 낭비될 수 있는 상황을 찾는다.",
+            "모둠별로 에너지 절약 아이디어를 브레인스토밍한다.",
+            "포스터나 발표자료 형태로 실천 방안을 제안한다."
+          ],
+          wrapUp: "실천 가능한 행동부터 학교 차원의 제안까지 함께 정리한다.",
+          nextConnection: "학생 생활 속 실천과 지역사회 문제 해결로 탐구를 확장한다."
         }
       ]
     },
@@ -418,12 +460,26 @@ function getIssueContent() {
       ],
       lessonFlow: [
         {
-          title: "1차시 · 생활권 환경 비교",
-          text: `${district}의 학생 수와 환경 자료를 확인하며 환경 특성을 탐색한다.`
+          title: "1차시 · 우리 생활권의 환경은 어떤 특징이 있을까?",
+          goal: "생활권의 환경 자료와 학교 분포를 함께 살펴보며 생활 환경의 특징을 이해한다.",
+          activities: [
+            `${district}의 환경 자료를 살펴보며 생활권의 특징을 정리한다.`,
+            `${schoolName}와 주변 학교의 규모와 분포를 비교하며 학교 환경과 지역 환경의 연결점을 찾아본다.`,
+            "환경 특성이 학생 생활에 어떤 영향을 줄 수 있을지 모둠별로 토의한다."
+          ],
+          wrapUp: "지역 환경과 학교 환경은 분리된 것이 아니라 서로 영향을 주고받는 관계임을 정리한다.",
+          nextConnection: "다음 차시에서 학생 생활 환경을 개선할 수 있는 실천 방안을 더 구체적으로 제안한다."
         },
         {
-          title: "2차시 · 개선 방안 제안",
-          text: `환경 특성이 학생 생활에 미치는 영향을 분석하고 학교 주변 개선 방안을 제안한다.`
+          title: "2차시 · 더 나은 생활 환경을 만들기 위해 무엇을 할 수 있을까?",
+          goal: "생활 환경 개선을 위한 실천 방안을 학생 관점에서 제안한다.",
+          activities: [
+            "우리 학교와 생활권에서 개선이 필요하다고 생각하는 환경 요소를 정리한다.",
+            "학생이 직접 실천할 수 있는 방안과 학교 또는 지역 차원의 개선 방안을 구분해 생각한다.",
+            "모둠별 제안을 발표하고 가장 실천 가능성이 높은 아이디어를 함께 선정한다."
+          ],
+          wrapUp: "생활 환경 문제는 지역 자료를 해석한 뒤 구체적인 행동으로 이어질 때 더 의미가 커짐을 확인한다.",
+          nextConnection: "지역 환경 캠페인, 학교 공간 개선 프로젝트 등으로 탐구를 이어갈 수 있다."
         }
       ]
     }
@@ -525,26 +581,60 @@ function renderLessonPlan() {
   lessonGoals.innerHTML = "";
   lessonFlow.innerHTML = "";
 
-  content.subQuestions.forEach((q) => {
+  (content.subQuestions || []).forEach((q) => {
     const li = document.createElement("li");
     li.textContent = q;
     subQuestions.appendChild(li);
   });
 
-  content.lessonGoals.forEach((goal) => {
+  (content.lessonGoals || []).forEach((goal) => {
     const li = document.createElement("li");
     li.textContent = goal;
     lessonGoals.appendChild(li);
   });
 
-  content.lessonFlow.forEach((flow) => {
-    const div = document.createElement("div");
-    div.className = "timeline-item";
-    div.innerHTML = `<h4>${flow.title}</h4><p>${flow.text}</p>`;
-    lessonFlow.appendChild(div);
+  (content.lessonFlow || []).forEach((flow, index) => {
+    const card = document.createElement("div");
+    card.className = "lesson-step-card";
+
+    const activitiesHtml = (flow.activities || [])
+      .map((item) => `<li>${item}</li>`)
+      .join("");
+
+    card.innerHTML = `
+      <div class="lesson-step-header">
+        <div class="lesson-step-badge">${index + 1}차시</div>
+        <h4>${flow.title || ""}</h4>
+      </div>
+
+      <div class="lesson-step-section">
+        <div class="lesson-step-label">차시 목표</div>
+        <p>${flow.goal || ""}</p>
+      </div>
+
+      <div class="lesson-step-section">
+        <div class="lesson-step-label">주요 활동</div>
+        <ol class="lesson-step-list">
+          ${activitiesHtml}
+        </ol>
+      </div>
+
+      <div class="lesson-step-grid">
+        <div class="lesson-step-mini">
+          <div class="lesson-step-label">정리</div>
+          <p>${flow.wrapUp || ""}</p>
+        </div>
+        <div class="lesson-step-mini">
+          <div class="lesson-step-label">다음 차시 연결</div>
+          <p>${flow.nextConnection || ""}</p>
+        </div>
+      </div>
+    `;
+
+    lessonFlow.appendChild(card);
   });
 
-  renderPromptModalContent();
+  renderPromptModalContent?.();
 }
 
 function renderOutputs() {
@@ -582,8 +672,8 @@ function renderOutputs() {
     </thead>
     <tbody>
       ${rubricRows
-        .map(
-          (row) => `
+      .map(
+        (row) => `
         <tr>
           <td>${row[0]}</td>
           <td>${row[1]}</td>
@@ -591,8 +681,8 @@ function renderOutputs() {
           <td>${row[3]}</td>
         </tr>
       `
-        )
-        .join("")}
+      )
+      .join("")}
     </tbody>
   `;
 
@@ -668,50 +758,51 @@ function bindEvents() {
   });
 
   document.getElementById("generate-plan-btn").addEventListener("click", async () => {
-  try {
-    const btn = document.getElementById("generate-plan-btn");
-    btn.disabled = true;
-    btn.textContent = "AI 수업안 생성 중...";
+    try {
+      const btn = document.getElementById("generate-plan-btn");
+      btn.disabled = true;
+      btn.textContent = "AI 수업안 생성 중...";
 
-    const prompt = buildLessonPlanPrompt();
-    const result = await callLessonAPI(prompt, "plan");
+      const prompt = buildLessonPlanPrompt();
+      const result = await callLessonAPI(prompt, "plan");
 
-    appState.aiLessonPlan = result;
-    renderLessonPlan();
-    showScreen(3);
-  } catch (err) {
-    alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
-  } finally {
-    const btn = document.getElementById("generate-plan-btn");
-    btn.disabled = false;
-    btn.textContent = "이 주제로 수업 설계하기";
-  }
-});
-
-document.getElementById("generate-output-btn").addEventListener("click", async () => {
-  try {
-    const btn = document.getElementById("generate-output-btn");
-    btn.disabled = true;
-    btn.textContent = "산출물 생성 중...";
-
-    if (!appState.aiLessonPlan) {
-      throw new Error("먼저 AI 수업안을 생성해야 합니다.");
+      appState.aiLessonPlan = result;
+      appState.lastImprovedPrompt = result._meta?.improvedPrompt || "";
+      renderLessonPlan();
+      showScreen(3);
+    } catch (err) {
+      alert("수업안 생성 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      const btn = document.getElementById("generate-plan-btn");
+      btn.disabled = false;
+      btn.textContent = "이 주제로 수업 설계하기";
     }
+  });
 
-    const prompt = buildOutputsPrompt();
-    const result = await callLessonAPI(prompt, "output");
+  document.getElementById("generate-output-btn").addEventListener("click", async () => {
+    try {
+      const btn = document.getElementById("generate-output-btn");
+      btn.disabled = true;
+      btn.textContent = "산출물 생성 중...";
 
-    appState.aiOutputs = result;
-    renderOutputs();
-    showScreen(4);
-  } catch (err) {
-    alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
-  } finally {
-    const btn = document.getElementById("generate-output-btn");
-    btn.disabled = false;
-    btn.textContent = "수업 산출물 생성";
-  }
-});
+      if (!appState.aiLessonPlan) {
+        throw new Error("먼저 AI 수업안을 생성해야 합니다.");
+      }
+
+      const prompt = buildOutputsPrompt();
+      const result = await callLessonAPI(prompt, "output");
+
+      appState.aiOutputs = result;
+      renderOutputs();
+      showScreen(4);
+    } catch (err) {
+      alert("산출물 생성 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      const btn = document.getElementById("generate-output-btn");
+      btn.disabled = false;
+      btn.textContent = "수업 산출물 생성";
+    }
+  });
 
   document.getElementById("open-ai-modal-btn").addEventListener("click", openModal);
   document.getElementById("close-ai-modal-btn").addEventListener("click", closeModal);
@@ -761,12 +852,12 @@ const API_BASE =
 
 async function callLessonAPI(prompt, mode = "plan") {
   const res = await fetch(`${API_BASE}/api/generate`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ prompt, mode })
-});
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ prompt, mode })
+  });
 
   if (!res.ok) {
     const err = await res.text();
